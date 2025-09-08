@@ -142,6 +142,9 @@
     <ProjectReference Include="..\NetworkDiagnosticDll\NetworkDiagnosticDll.vcxproj">
       <Project>{ccc9fa20-7d0f-41f9-bd3c-807493f4d45c}</Project>
     </ProjectReference>
+    <ProjectReference Include="..\WifiPortalDll\WifiPortalDll.vcxproj">
+      <Project>{31649d35-3e9c-417d-a9b9-73f631160035}</Project>
+    </ProjectReference>
     <ProjectReference Include="..\ZfwInteractionDll\ZfwInteractionDll.vcxproj">
       <Project>{d071f9de-7e70-4d3c-a41d-3f07188ddd4b}</Project>
     </ProjectReference>

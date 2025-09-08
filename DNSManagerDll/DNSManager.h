@@ -6,6 +6,12 @@
 #define DNS_API __declspec(dllimport)
 #endif
 
+#ifdef _MSC_VER
+#pragma warning(push)
+#pragma warning(disable: 4251)
+#pragma warning(disable: 4275)
+#endif
+
 #include <string>
 #include <vector>
 #include <memory>
@@ -89,3 +95,7 @@ private:
     class DnsManagerImpl;
     std::unique_ptr<DnsManagerImpl> impl;
 };
+
+#ifdef _MSC_VER
+#pragma warning(pop)
+#endif

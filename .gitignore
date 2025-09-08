@@ -1,8 +1,7 @@
 vcpkg/
 *.html
 *.log
-
-ZfwInteractionDll_bak/
+pac.txt
 
 .vs/
 bin/
@@ -10,4 +9,5 @@ ZfwInteractionDll/x64/
 DNSManagerDll/x64/
 TestApp/x64/
 Marduk/x64/
-NetworkDiagnostic/x64/
+NetworkDiagnosticDll/x64/
+WifiPortalDll/x64/

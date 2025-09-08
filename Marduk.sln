@@ -13,6 +13,8 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Marduk", "Marduk\Marduk.vcx
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "NetworkDiagnosticDll", "NetworkDiagnosticDll\NetworkDiagnosticDll.vcxproj", "{CCC9FA20-7D0F-41F9-BD3C-807493F4D45C}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "WifiPortalDll", "WifiPortalDll\WifiPortalDll.vcxproj", "{31649D35-3E9C-417D-A9B9-73F631160035}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -61,6 +63,14 @@ Global
 		{CCC9FA20-7D0F-41F9-BD3C-807493F4D45C}.Release|x64.Build.0 = Release|x64
 		{CCC9FA20-7D0F-41F9-BD3C-807493F4D45C}.Release|x86.ActiveCfg = Release|Win32
 		{CCC9FA20-7D0F-41F9-BD3C-807493F4D45C}.Release|x86.Build.0 = Release|Win32
+		{31649D35-3E9C-417D-A9B9-73F631160035}.Debug|x64.ActiveCfg = Debug|x64
+		{31649D35-3E9C-417D-A9B9-73F631160035}.Debug|x64.Build.0 = Debug|x64
+		{31649D35-3E9C-417D-A9B9-73F631160035}.Debug|x86.ActiveCfg = Debug|Win32
+		{31649D35-3E9C-417D-A9B9-73F631160035}.Debug|x86.Build.0 = Debug|Win32
+		{31649D35-3E9C-417D-A9B9-73F631160035}.Release|x64.ActiveCfg = Release|x64
+		{31649D35-3E9C-417D-A9B9-73F631160035}.Release|x64.Build.0 = Release|x64
+		{31649D35-3E9C-417D-A9B9-73F631160035}.Release|x86.ActiveCfg = Release|Win32
+		{31649D35-3E9C-417D-A9B9-73F631160035}.Release|x86.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
