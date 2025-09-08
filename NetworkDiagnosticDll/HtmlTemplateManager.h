@@ -1,5 +1,6 @@
 #pragma once
 
+#include "NetworkDiagnostic.h"
 #include <string>
 #include <map>
 #include <vector>

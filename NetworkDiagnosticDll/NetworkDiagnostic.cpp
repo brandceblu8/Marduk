@@ -1,5 +1,8 @@
 ﻿#include "pch.h"
 #include "NetworkDiagnostic.h"
+#include "HtmlTemplateManager.h"
+#include "DiagnosticHTMLTemplates.h"
+#include "SimpleTemplateProcessor.h"
 #include <Windows.h>
 #include <winsock2.h>
 #include <ws2tcpip.h>
@@ -116,6 +119,15 @@ public:
 class NetworkDiagnostic::NetworkDiagnosticImpl {
 private:
     std::unique_ptr<ICMPHelper> icmpHelper;
+    std::map<int, std::string> pppoe_error_suggestions = {
+        {678, u8"🔴 PPPoE错误678：远程计算机没有响应 - 检查网线连接、联系运营商或重启光猫"},
+        {691, u8"🔴 PPPoE错误691：用户名或密码错误 - 请检查账号密码是否正确"},
+        {619, u8"🔴 PPPoE错误619：指定的端口未连接 - 检查网络适配器状态"},
+        {676, u8"🔴 PPPoE错误676：电话占线 - 可能有其他设备正在使用相同账号"},
+        {720, u8"🔴 PPPoE错误720：协议配置错误 - 重新创建宽带连接或联系技术支持"},
+        {769, u8"🔴 PPPoE错误769：指定的目标不可到达 - 检查网络适配器驱动程序"},
+        {815, u8"🔴 PPPoE错误815：宽带网络连接配置可能不正确 - 重新配置网络连接"}
+    };
 
 public:
     NetworkDiagnosticImpl() {
@@ -398,7 +410,7 @@ public:
                 "ICMP Helper not initialized");
         }
 
-        if (!icmpHelper -> IsAvailable()) {
+        if (!icmpHelper->IsAvailable()) {
             return DiagnosticResult(DiagnosticErrorCode::NETWORK_PING_FAILED,
                 "ICMP API not available");
         }
@@ -632,7 +644,7 @@ public:
         // 执行网络测试
         auto ping_result = pingTestImpl(config.ping_targets, result.ping_results);
         //auto ping_result = rawSocketPingImpl(config.ping_targets, result.ping_results);
-		//auto ping_result = icmpApiPing(config.ping_targets, result.ping_results);
+        //auto ping_result = icmpApiPing(config.ping_targets, result.ping_results);
         auto dns_result = dnsTestImpl(config.dns_test_domains, result.dns_results);
         auto tcp_result = tcpTestImpl(config.tcp_test_targets, result.tcp_results);
 
@@ -748,665 +760,270 @@ public:
     }
 
     DiagnosticResult generateHTMLReportImpl(const DiagnosticResult& diagnostic_result, const std::string& output_path) {
-        std::ofstream file(output_path, std::ios::out | std::ios::binary);
-        if (!file.is_open()) {
-            return DiagnosticResult(DiagnosticErrorCode::FILE_CREATE_FAILED,
-                "Failed to create HTML report file: " + output_path);
-        }
+        try {
+            // 准备模板变量
+            SimpleTemplateProcessor::Variables variables;
 
-        std::string html_content = u8R"(<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>网络诊断报告</title>
-    <style>
-        body { font-family: 'Microsoft YaHei', sans-serif; margin: 20px; background-color: #f5f5f5; }
-        .container { max-width: 1200px; margin: 0 auto; background-color: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
-        h1 { color: #2c3e50; border-bottom: 3px solid #3498db; padding-bottom: 10px; }
-        h2 { color: #34495e; margin-top: 30px; }
-        .info-box { background-color: #ecf0f1; padding: 15px; border-left: 4px solid #3498db; margin: 10px 0; }
-        .success { color: #27ae60; font-weight: bold; }
-        .error { color: #e74c3c; font-weight: bold; }
-        .warning { color: #f39c12; font-weight: bold; }
-        table { width: 100%; border-collapse: collapse; margin: 15px 0; }
-        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }
-        th { background-color: #3498db; color: white; }
-        tr:nth-child(even) { background-color: #f2f2f2; }
-        .metric { display: inline-block; margin: 10px; padding: 10px; background-color: #ecf0f1; border-radius: 5px; }
-        .timestamp { color: #7f8c8d; font-size: 0.9em; }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h1>[诊断] 网络诊断报告</h1>
-        <div class="info-box">
-            <strong>生成时间:</strong> <span class="timestamp">)";
+            // 基本信息
+            variables["timestamp"] = diagnostic_result.timestamp;
+            variables["version"] = u8"西电校园网辅助工具 v1.0";
+            variables["system_info"] = SimpleTemplateProcessor::escapeHtml(diagnostic_result.system_info);
 
-        html_content += diagnostic_result.timestamp;
-        html_content += u8R"(</span><br>
-            <strong>报告版本:</strong> <span class="timestamp">西电校园网辅助工具 v1.0</span>
-        </div>
-)";
-
-        // 系统信息
-        html_content += u8R"(
-        <h2>💻 系统信息</h2>
-        <div class="info-box">
-            <pre>)";
-        html_content += diagnostic_result.system_info;
-        html_content += u8"</pre>\n        </div>\n";
-
-        // 网络接口
-        html_content += u8R"(
-        <h2>🌐 网络接口</h2>
-        <table>
-            <tr>
-                <th>接口名称</th>
-                <th>描述</th>
-                <th>MAC地址</th>
-                <th>IP地址</th>
-                <th>子网掩码</th>
-                <th>网关</th>
-                <th>类型</th>
-                <th>状态</th>
-            </tr>
-        )";
-
-        for (const auto& iface : diagnostic_result.network_interfaces) {
-            html_content += u8"            <tr>\n";
-            html_content += u8"                <td>" + iface.name + "</td>\n";
-            html_content += u8"                <td>" + iface.description + "</td>\n";
-            html_content += u8"                <td>" + iface.mac_address + "</td>\n";
-            html_content += u8"                <td>" + iface.ip_address + "</td>\n";
-            html_content += u8"                <td>" + iface.subnet_mask + "</td>\n";
-            html_content += u8"                <td>" + iface.gateway + "</td>\n";
-            html_content += u8"                <td>" + iface.connection_type + "</td>\n";
-            if (iface.is_enabled) {
-                html_content += u8"                <td><span class=\"status-badge badge-success\">启用</span></td>\n";
-            }
-            else {
-                html_content += u8"                <td><span class=\"status-badge badge-error\">禁用</span></td>\n";
-            }
-            html_content += u8"            </tr>\n";
-        }
-        html_content += u8"        </table>\n";
-
-        // 代理配置
-        html_content += u8R"(
-        <h2>🔄 代理配置</h2>
-        <div class="info-box">
-            <p><strong>🔧 代理状态:</strong> <span class=")";
-        html_content += (diagnostic_result.proxy_config.proxy_enabled ? u8"success\">已启用" : u8"error\">未启用");
-        html_content += u8"</span></p>\n";
-
-        if (diagnostic_result.proxy_config.proxy_enabled) {
-            html_content += u8"            <p><strong>🌐 代理服务器:</strong> <code>" + diagnostic_result.proxy_config.proxy_server + "</code></p>\n";
-            html_content += u8"            <p><strong>🔌 代理端口:</strong> <code>" + diagnostic_result.proxy_config.proxy_port + "</code></p>\n";
-        }
-
-        html_content += u8"            <p><strong>🔍 自动检测:</strong> <span class=\"" +
-            std::string(diagnostic_result.proxy_config.auto_detect ? u8"success\">已启用" : u8"error\">未启用") +
-            u8"</span></p>\n";
-
-        if (!diagnostic_result.proxy_config.auto_config_url.empty()) {
-            html_content += u8"            <p><strong>⚙️ 自动配置URL:</strong> <code>" + diagnostic_result.proxy_config.auto_config_url + "</code></p>\n";
-        }
-        html_content += u8"        </div>\n";
-
-        // Ping测试结果
-        html_content += u8R"(
-        <h2>📡 连通性测试结果</h2>
-        <table>
-            <tr>
-                <th>目标地址</th>
-                <th>状态</th>
-                <th>丢包率</th>
-                <th>最小延迟</th>
-                <th>最大延迟</th>
-                <th>平均延迟</th>
-                <th>错误信息</th>
-            </tr>
-        )";
-
-        for (const auto& ping : diagnostic_result.ping_results) {
-            html_content += u8"            <tr>\n";
-            html_content += u8"                <td><code>" + ping.target + "</code></td>\n";
-            html_content += u8"                <td><span class=\"" + std::string(ping.success ? u8"success\">连接成功" : u8"error\">连接失败") + u8"</span></td>\n";
-
-            if (ping.success) {
-                html_content += u8"                <td><span class=\"metric-value\">" + std::to_string(ping.packet_loss_percent) + "%</span></td>\n";
-                html_content += u8"                <td><span class=\"ping-time\">" + std::to_string((int)ping.min_time_ms) + "ms</span></td>\n";
-                html_content += u8"                <td><span class=\"ping-time\">" + std::to_string((int)ping.max_time_ms) + "ms</span></td>\n";
-                html_content += u8"                <td><span class=\"ping-time\">" + std::to_string((int)ping.avg_time_ms) + "ms</span></td>\n";
-                html_content += u8"                <td>-</td>\n";
-            }
-            else {
-                html_content += u8"                <td><span class=\"error\">100%</span></td>\n";
-                html_content += u8"                <td>-</td>\n";
-                html_content += u8"                <td>-</td>\n";
-                html_content += u8"                <td>-</td>\n";
-                html_content += u8"                <td><span class=\"error\">" + ping.error_message + "</span></td>\n";
-            }
-            html_content += u8"            </tr>\n";
-        }
-        html_content += u8"        </table>\n";
-
-        // DNS测试结果
-        html_content += u8R"(
-        <h2>🌍 DNS解析测试结果</h2>
-        <table>
-            <tr>
-                <th>域名</th>
-                <th>状态</th>
-                <th>查询时间</th>
-                <th>解析IP地址</th>
-                <th>DNS服务器</th>
-                <th>错误信息</th>
-            </tr>
-        )";
-
-        for (const auto& dns : diagnostic_result.dns_results) {
-            html_content += u8"            <tr>\n";
-            html_content += u8"                <td><strong>" + dns.hostname + u8"</strong></td>\n";
-
-            if (dns.success) {
-                html_content += u8"                <td><span class=\"success\">解析成功</span></td>\n";
-            }
-            else {
-                html_content += u8"                <td><span class=\"error\">解析失败</span></td>\n";
-            }
-
-            html_content += u8"                <td><span class=\"ping-time\">" + std::to_string((int)dns.query_time_ms) + u8"ms</span></td>\n";
-
-            if (dns.success) {
-                html_content += u8"                <td>";
-                for (size_t i = 0; i < dns.ip_addresses.size(); ++i) {
-                    if (i > 0) html_content += u8"<br>";
-                    html_content += u8"<code>" + dns.ip_addresses[i] + u8"</code>";
+            // 计算统计数据
+            int active_interfaces = 0;
+            for (const auto& iface : diagnostic_result.network_interfaces) {
+                if (iface.is_enabled && iface.ip_address != "0.0.0.0") {
+                    active_interfaces++;
                 }
-                html_content += u8"</td>\n";
-                html_content += u8"                <td><code>" + dns.dns_server_used + u8"</code></td>\n";
-                html_content += u8"                <td>-</td>\n";
-            }
-            else {
-                html_content += u8"                <td>-</td>\n";
-                html_content += u8"                <td>-</td>\n";
-                html_content += u8"                <td><span class=\"error\">" + dns.error_message + u8"</span></td>\n";
-            }
-            html_content += u8"            </tr>\n";
-        }
-        html_content += u8"        </table>\n";
-
-        // TCP连接测试结果
-        html_content += u8R"(
-        <h2>🔌 TCP连接测试结果</h2>
-        <table>
-            <tr>
-                <th>目标主机</th>
-                <th>端口</th>
-                <th>状态</th>
-                <th>连接时间</th>
-                <th>错误信息</th>
-            </tr>
-)";
-
-        for (const auto& tcp : diagnostic_result.tcp_results) {
-            html_content += u8"            <tr>\n";
-            html_content += u8"                <td><strong>" + tcp.target_host + u8"</strong></td>\n";
-            html_content += u8"                <td><span class=\"metric-value\">" + std::to_string(tcp.target_port) + u8"</span></td>\n";
-
-            if (tcp.success) {
-                html_content += u8"                <td><span class=\"success\">连接成功</span></td>\n";
-            }
-            else {
-                html_content += u8"                <td><span class=\"error\">连接失败</span></td>\n";
             }
 
-            html_content += u8"                <td><span class=\"ping-time\">" + std::to_string((int)tcp.connection_time_ms) + u8"ms</span></td>\n";
-
-            if (tcp.success) {
-                html_content += u8"                <td>-</td>\n";
+            int successful_pings = 0;
+            for (const auto& ping : diagnostic_result.ping_results) {
+                if (ping.success) successful_pings++;
             }
-            else {
-                html_content += u8"                <td><span class=\"error\">" + tcp.error_message + u8"</span></td>\n";
+
+            int successful_dns = 0;
+            for (const auto& dns : diagnostic_result.dns_results) {
+                if (dns.success) successful_dns++;
             }
-            html_content += u8"            </tr>\n";
-        }
-        html_content += u8"        </table>\n";
 
-        // 路由表
-        if (!diagnostic_result.routing_table.empty()) {
-            html_content += u8R"(
-        <h2>🛣️ 路由表信息</h2>
-        <table>
-            <tr>
-                <th>目标网络</th>
-                <th>子网掩码</th>
-                <th>网关地址</th>
-                <th>网络接口</th>
-                <th>路由跃点</th>
-            </tr>
-)";
-
-            for (const auto& route : diagnostic_result.routing_table) {
-                html_content += u8"            <tr>\n";
-                html_content += u8"                <td><code>" + route.destination + "</code></td>\n";
-                html_content += u8"                <td><code>" + route.netmask + "</code></td>\n";
-                html_content += u8"                <td><code>" + route.gateway + "</code></td>\n";
-                html_content += u8"                <td><span class=\"metric-value\">" + route.route_interface + "</span></td>\n";
-                html_content += u8"                <td><span class=\"metric-value\">" + std::to_string(route.metric) + "</span></td>\n";
-                html_content += u8"            </tr>\n";
+            int successful_tcp = 0;
+            for (const auto& tcp : diagnostic_result.tcp_results) {
+                if (tcp.success) successful_tcp++;
             }
-            html_content += u8"        </table>\n";
-        }
 
+            // 摘要统计
+            variables["summary_active_interfaces"] = std::to_string(active_interfaces);
+            variables["summary_successful_pings"] = std::to_string(successful_pings);
+            variables["summary_total_pings"] = std::to_string(diagnostic_result.ping_results.size());
+            variables["summary_successful_dns"] = std::to_string(successful_dns);
+            variables["summary_total_dns"] = std::to_string(diagnostic_result.dns_results.size());
+            variables["summary_successful_tcp"] = std::to_string(successful_tcp);
+            variables["summary_total_tcp"] = std::to_string(diagnostic_result.tcp_results.size());
 
-        html_content += u8R"(
-        <div class="footer">
-            <h3 style="color: #2c3e50; margin-bottom: 20px;">📋 诊断报告说明</h3>
-            <div style="text-align: left; max-width: 800px; margin: 0 auto;">
-                <p><strong>🔍 连通性测试:</strong> 检测与目标服务器的网络连接状态</p>
-                <p><strong>🌍 DNS解析:</strong> 验证域名解析服务是否正常工作</p>
-                <p><strong>🔌 TCP连接:</strong> 测试特定端口的连接可用性</p>
-                <p><strong>🌐 网络接口:</strong> 显示系统中所有网络适配器的状态</p>
-                <p><strong>🛣️ 路由信息:</strong> 展示网络数据包的转发路径配置</p>
-            </div>
-            <hr style="margin: 30px 0; border: none; height: 1px; background: linear-gradient(90deg, transparent, #bdc3c7, transparent);">
-            <div style="margin-top: 30px;">
-                <p style="font-size: 1.1em; font-weight: 600; color: #2c3e50; margin-bottom: 15px;">
-                    📊 西电校园网辅助工具 - 网络诊断报告
-                </p>
-                <p class="timestamp" style="font-size: 0.9em; margin: 5px 0;">
-                    🕐 生成时间: )";
-        html_content += diagnostic_result.timestamp;
-        html_content += u8R"(
-                </p>
-                <p class="timestamp" style="font-size: 0.9em; margin: 5px 0;">
-                    🔧 诊断引擎: NetworkDiagnostic v1.0
-                </p>
-                <p class="timestamp" style="font-size: 0.9em; margin: 5px 0;">
-                    💡 如遇网络问题，请根据测试结果检查相应配置
-                </p>
-                <div style="margin-top: 25px; padding: 20px; background: linear-gradient(135deg, #e8f5e8 0%, #f0f8ff 100%); border-radius: 10px; border-left: 4px solid #27ae60;">
-                    <h4 style="color: #27ae60; margin-bottom: 15px;">✅ 诊断建议</h4>
-                    <div style="text-align: left; font-size: 0.9em; line-height: 1.6;">
-        )";
+            // 生成网络接口表格行
+            std::string network_interfaces_rows;
+            for (const auto& iface : diagnostic_result.network_interfaces) {
+                SimpleTemplateProcessor::Variables row_vars;
+                row_vars["name"] = SimpleTemplateProcessor::escapeHtml(iface.name);
+                row_vars["description"] = SimpleTemplateProcessor::escapeHtml(iface.description);
+                row_vars["mac_address"] = SimpleTemplateProcessor::escapeHtml(iface.mac_address);
+                row_vars["ip_address"] = SimpleTemplateProcessor::escapeHtml(iface.ip_address);
+                row_vars["subnet_mask"] = SimpleTemplateProcessor::escapeHtml(iface.subnet_mask);
+                row_vars["gateway"] = SimpleTemplateProcessor::escapeHtml(iface.gateway);
+                row_vars["connection_type"] = SimpleTemplateProcessor::escapeHtml(iface.connection_type);
 
-        // 添加诊断建议
-        bool has_network_issues = false;
-        std::vector<std::string> suggestions;
-
-        //// 检查连通性问题
-        //if (successful_pings < diagnostic_result.ping_results.size() / 2) {
-        //    has_network_issues = true;
-        //    suggestions.push_back("🔴 网络连接异常：建议检查网络连接状态、防火墙设置或联系网络管理员");
-        //}
-
-        //// 检查DNS问题
-        //if (successful_dns < diagnostic_result.dns_results.size() / 2) {
-        //    has_network_issues = true;
-        //    suggestions.push_back("🟡 DNS解析异常：建议更换DNS服务器(如8.8.8.8)或检查DNS配置");
-        //}
-
-        //// 检查TCP连接问题
-        //if (successful_tcp < diagnostic_result.tcp_results.size() / 2) {
-        //    has_network_issues = true;
-        //    suggestions.push_back("🟠 TCP连接异常：建议检查目标服务器状态或端口可用性");
-        //}
-
-        //// 检查活跃接口
-        //if (active_interfaces == 0) {
-        //    has_network_issues = true;
-        //    suggestions.push_back("🔴 无活跃网络接口：请检查网络适配器驱动或物理连接");
-        //}
-
-        if (!has_network_issues) {
-            html_content += u8"                        <p style=\"color: #27ae60;\">🎉 网络状态良好！所有测试项目基本正常。</p>\n";
-        }
-        else {
-            for (const auto& suggestion : suggestions) {
-                html_content += u8"                        <p>• " + suggestion + "</p>\n";
-            }
-        }
-
-        html_content += u8R"(                    </div>
-                </div>
-            </div>
-        </div>
-        
-        <!-- 返回顶部按钮 -->
-        <div style="position: fixed; bottom: 30px; right: 30px; z-index: 1000;">
-            <button onclick="scrollToTop() " style = "
-            background: linear - gradient(135deg, #667eea 0 %, #764ba2 100 %);
-    border: none;
-    color: white;
-    padding: 15px;
-        border - radius: 50 %;
-    cursor: pointer;
-        box - shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
-        font - size: 18px;
-    width: 50px;
-    height: 50px;
-    transition: all 0.3s ease;
-        " onmouseover="this.style.transform = 'scale(1.1)'" onmouseout="this.style.transform = 'scale(1)'">
-            ↑
-            < / button>
-            < / div>
-            < / div>
-
-            <script>
-            // 返回顶部功能
-            function scrollToTop() {
-            window.scrollTo({
-                top: 0,
-                behavior : 'smooth'
-                });
-        }
-
-        // 页面加载完成后的动画效果
-        document.addEventListener('DOMContentLoaded', function() {
-            // 为表格行添加渐入动画
-            const tableRows = document.querySelectorAll('tr');
-            tableRows.forEach((row, index) = > {
-                row.style.opacity = '0';
-                row.style.transform = 'translateY(20px)';
-                row.style.transition = 'opacity 0.5s ease, transform 0.5s ease';
-
-                setTimeout(() = > {
-                    row.style.opacity = '1';
-                    row.style.transform = 'translateY(0)';
-                }, index * 50);
-            });
-
-            // 为摘要卡片添加动画
-            const summaryCards = document.querySelectorAll('.summary-card');
-            summaryCards.forEach((card, index) = > {
-                card.style.opacity = '0';
-                card.style.transform = 'translateY(30px)';
-                card.style.transition = 'opacity 0.6s ease, transform 0.6s ease';
-
-                setTimeout(() = > {
-                    card.style.opacity = '1';
-                    card.style.transform = 'translateY(0)';
-                }, 300 + index * 100);
-            });
-
-            // 显示返回顶部按钮
-            window.addEventListener('scroll', function() {
-                const backToTopBtn = document.querySelector('button[onclick="scrollToTop() "]');
-                if (window.pageYOffset > 300) {
-                    backToTopBtn.style.opacity = '1';
-                    backToTopBtn.style.pointerEvents = 'auto';
+                if (iface.is_enabled) {
+                    row_vars["status_html"] = u8"<span class=\"success\">启用</span>";
                 }
                 else {
-                    backToTopBtn.style.opacity = '0';
-                    backToTopBtn.style.pointerEvents = 'none';
+                    row_vars["status_html"] = u8"<span class=\"error\">禁用</span>";
                 }
-            });
 
-            // 初始隐藏返回顶部按钮
-            const backToTopBtn = document.querySelector('button[onclick="scrollToTop() "]');
-            backToTopBtn.style.opacity = '0';
-            backToTopBtn.style.transition = 'opacity 0.3s ease';
-        });
+                network_interfaces_rows += SimpleTemplateProcessor::render(
+                    DiagnosticHTMLTemplates::NETWORK_INTERFACE_ROW_TEMPLATE, row_vars);
+            }
+            variables["network_interfaces_rows"] = network_interfaces_rows;
 
-        // 表格行点击高亮效果
-        document.addEventListener('DOMContentLoaded', function() {
-            const tableRows = document.querySelectorAll('tbody tr, table tr:not(:first-child)');
-
-            tableRows.forEach(row = > {
-                row.addEventListener('click', function() {
-                    // 移除其他行的高亮
-                    tableRows.forEach(r = > r.classList.remove('highlighted'));
-
-                    // 添加当前行的高亮
-                    this.classList.add('highlighted');
-
-                    // 3秒后自动移除高亮
-                    setTimeout(() = > {
-                        this.classList.remove('highlighted');
-                    }, 3000);
-                });
-            });
-        });
-
-        // 打印功能
-        function printReport() {
-            window.print();
-        }
-
-        // 导出功能提示
-        function showExportOptions() {
-            alert('💡 提示：您可以通过浏览器的"打印"功能将此报告保存为PDF文件\n\n或者使用Ctrl+P快捷键');
-        }
-
-        // 添加键盘快捷键支持
-        document.addEventListener('keydown', function(e) {
-            // Ctrl+P 打印
-            if (e.ctrlKey&& e.key == = 'p') {
-                e.preventDefault();
-                printReport();
+            // 生成代理配置内容
+            std::string proxy_config_content;
+            if (diagnostic_result.proxy_config.proxy_enabled) {
+                proxy_config_content += u8"<p><strong>🔧 代理状态:</strong> <span class=\"success\">已启用</span></p>\n";
+                proxy_config_content += u8"<p><strong>🌐 代理服务器:</strong> <code>" +
+                    SimpleTemplateProcessor::escapeHtml(diagnostic_result.proxy_config.proxy_server) + u8"</code></p>\n";
+                proxy_config_content += u8"<p><strong>🔌 代理端口:</strong> <code>" +
+                    SimpleTemplateProcessor::escapeHtml(diagnostic_result.proxy_config.proxy_port) + u8"</code></p>\n";
+            }
+            else {
+                proxy_config_content += u8"<p><strong>🔧 代理状态:</strong> <span class=\"error\">未启用</span></p>\n";
             }
 
-            // Home键回到顶部
-            if (e.key == = 'Home') {
-                e.preventDefault();
-                scrollToTop();
+            if (diagnostic_result.proxy_config.auto_detect) {
+                proxy_config_content += u8"<p><strong>🔍 自动检测:</strong> <span class=\"success\">已启用</span></p>\n";
+            }
+            else {
+                proxy_config_content += u8"<p><strong>🔍 自动检测:</strong> <span class=\"error\">未启用</span></p>\n";
             }
 
-            // F5刷新提示
-            if (e.key == = 'F5') {
-                e.preventDefault();
-                if (confirm('🔄 确定要刷新页面吗？刷新后诊断数据将丢失。\n\n建议先保存此报告。')) {
-                    location.reload();
+            if (!diagnostic_result.proxy_config.auto_config_url.empty()) {
+                proxy_config_content += u8"<p><strong>⚙️ 自动配置URL:</strong> <code>" +
+                    SimpleTemplateProcessor::escapeHtml(diagnostic_result.proxy_config.auto_config_url) + u8"</code></p>\n";
+            }
+            variables["proxy_config_content"] = proxy_config_content;
+
+            // 生成Ping测试结果表格行
+            std::string ping_results_rows;
+            for (const auto& ping : diagnostic_result.ping_results) {
+                SimpleTemplateProcessor::Variables row_vars;
+                row_vars["target"] = SimpleTemplateProcessor::escapeHtml(ping.target);
+
+                if (ping.success) {
+                    row_vars["status_html"] = u8"<span class=\"success\">连接成功</span>";
+                    row_vars["packet_loss"] = std::to_string(ping.packet_loss_percent) + u8"%";
+                    row_vars["min_time"] = std::to_string(static_cast<int>(ping.min_time_ms)) + u8"ms";
+                    row_vars["max_time"] = std::to_string(static_cast<int>(ping.max_time_ms)) + u8"ms";
+                    row_vars["avg_time"] = std::to_string(static_cast<int>(ping.avg_time_ms)) + u8"ms";
+                    row_vars["error_message"] = u8"-";
                 }
+                else {
+                    row_vars["status_html"] = u8"<span class=\"error\">连接失败</span>";
+                    row_vars["packet_loss"] = u8"<span class=\"error\">100%</span>";
+                    row_vars["min_time"] = u8"-";
+                    row_vars["max_time"] = u8"-";
+                    row_vars["avg_time"] = u8"-";
+                    row_vars["error_message"] = u8"<span class=\"error\">" +
+                        SimpleTemplateProcessor::escapeHtml(ping.error_message) + u8"</span>";
+                }
+
+                ping_results_rows += SimpleTemplateProcessor::render(
+                    DiagnosticHTMLTemplates::PING_RESULT_ROW_TEMPLATE, row_vars);
             }
-        });
+            variables["ping_results_rows"] = ping_results_rows;
 
-        // 复制表格数据功能
-        function copyTableData(tableElement) {
-            let csvContent = '';
-            const rows = tableElement.querySelectorAll('tr');
+            // 生成DNS测试结果表格行
+            std::string dns_results_rows;
+            for (const auto& dns : diagnostic_result.dns_results) {
+                SimpleTemplateProcessor::Variables row_vars;
+                row_vars["hostname"] = SimpleTemplateProcessor::escapeHtml(dns.hostname);
+                row_vars["query_time"] = std::to_string(static_cast<int>(dns.query_time_ms));
 
-            rows.forEach(row = > {
-                const cells = row.querySelectorAll('td, th');
-                const rowData = Array.from(cells).map(cell = >
-                    '"' + cell.textContent.replace(/ "/g, '""') + '"'
-                    ).join(',');
-                csvContent += rowData + '\n';
-            });
+                if (dns.success) {
+                    row_vars["status_html"] = u8"<span class=\"success\">解析成功</span>";
 
-            navigator.clipboard.writeText(csvContent).then(() = > {
-                // 显示复制成功提示
-                showToast('📋 表格数据已复制到剪贴板');
-            }).catch (() = > {
-                // 降级方案
-                const textArea = document.createElement('textarea');
-                textArea.value = csvContent;
-                document.body.appendChild(textArea);
-                textArea.select();
-                document.execCommand('copy');
-                document.body.removeChild(textArea);
-                showToast('📋 表格数据已复制到剪贴板');
-            });
-        }
-
-        // 显示Toast消息
-        function showToast(message) {
-            const toast = document.createElement('div');
-            toast.textContent = message;
-            toast.style.cssText = `
-                position: fixed;
-        top: 20px;
-        right: 20px;
-        background: linear - gradient(135deg, #27ae60, #2ecc71);
-        color: white;
-        padding: 15px 25px;
-            border - radius: 8px;
-            box - shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
-            z - index: 10000;
-            font - weight: 600;
-        transform: translateX(400px);
-        transition: transform 0.3s ease;
-            `;
-
-                document.body.appendChild(toast);
-
-            // 动画显示
-            setTimeout(() = > {
-                toast.style.transform = 'translateX(0)';
-            }, 10);
-
-            // 3秒后隐藏并移除
-            setTimeout(() = > {
-                toast.style.transform = 'translateX(400px)';
-                setTimeout(() = > {
-                    if (toast.parentNode) {
-                        toast.parentNode.removeChild(toast);
+                    // 构建IP地址列表
+                    std::string ip_addresses_html;
+                    for (size_t i = 0; i < dns.ip_addresses.size(); ++i) {
+                        if (i > 0) ip_addresses_html += u8"<br>";
+                        ip_addresses_html += u8"<code>" +
+                            SimpleTemplateProcessor::escapeHtml(dns.ip_addresses[i]) + u8"</code>";
                     }
-                }, 300);
-            }, 3000);
-        }
-
-        // 为表格添加右键菜单
-        document.addEventListener('DOMContentLoaded', function() {
-            const tables = document.querySelectorAll('table');
-
-            tables.forEach(table = > {
-                table.addEventListener('contextmenu', function(e) {
-                    e.preventDefault();
-
-                    // 移除已存在的右键菜单
-                    const existingMenu = document.querySelector('.context-menu');
-                    if (existingMenu) {
-                        existingMenu.remove();
-                    }
-
-                    // 创建右键菜单
-                    const contextMenu = document.createElement('div');
-                    contextMenu.className = 'context-menu';
-                    contextMenu.style.cssText = `
-                        position: fixed;
-                left: ${ e.clientX }px;
-                top: ${ e.clientY }px;
-                background: white;
-                border: 1px solid #ddd;
-                    border - radius: 8px;
-                    box - shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
-                    z - index: 10000;
-                    min - width: 150px;
-                overflow: hidden;
-                    `;
-
-                        const copyOption = document.createElement('div');
-                    copyOption.textContent = '📋 复制表格数据';
-                    copyOption.style.cssText = `
-                        padding: 12px 16px;
-                cursor: pointer;
-                transition: background - color 0.2s ease;
-                    font - size: 14px;
-                    `;
-
-                        copyOption.addEventListener('mouseenter', function() {
-                        this.style.backgroundColor = '#f8f9fa';
-                    });
-
-                    copyOption.addEventListener('mouseleave', function() {
-                        this.style.backgroundColor = 'white';
-                    });
-
-                    copyOption.addEventListener('click', function() {
-                        copyTableData(table);
-                        contextMenu.remove();
-                    });
-
-                    contextMenu.appendChild(copyOption);
-                    document.body.appendChild(contextMenu);
-
-                    // 点击其他地方时隐藏菜单
-                    const hideMenu = function() {
-                        if (contextMenu.parentNode) {
-                            contextMenu.parentNode.removeChild(contextMenu);
-                        }
-                        document.removeEventListener('click', hideMenu);
-                    };
-
-                    setTimeout(() = > {
-                        document.addEventListener('click', hideMenu);
-                    }, 10);
-                });
-            });
-        });
-        < / script>
-
-            <style>
-            /* 高亮行样式 */
-            tr.highlighted{
-                background: linear - gradient(135deg, #fff3cd 0 %, #ffeaa7 100 %) !important;
-                transform: scale(1.02);
-                box - shadow: 0 4px 15px rgba(255, 193, 7, 0.3) !important;
-                z - index: 10;
-                position: relative;
-        }
-
-            /* 选中文本样式 */
-            ::selection{
-                background: linear - gradient(135deg, #667eea 0 %, #764ba2 100 %);
-                color: white;
-        }
-
-            :: - moz - selection{
-                background: linear - gradient(135deg, #667eea 0 %, #764ba2 100 %);
-                color: white;
-        }
-
-            /* 打印样式 */
-            @media print{
-                body {
-                    background: white !important;
-                    font - size: 12px;
+                    row_vars["ip_addresses_html"] = ip_addresses_html;
+                    row_vars["dns_server"] = u8"<code>" +
+                        SimpleTemplateProcessor::escapeHtml(dns.dns_server_used) + u8"</code>";
+                    row_vars["error_message"] = u8"-";
+                }
+                else {
+                    row_vars["status_html"] = u8"<span class=\"error\">解析失败</span>";
+                    row_vars["ip_addresses_html"] = u8"-";
+                    row_vars["dns_server"] = u8"-";
+                    row_vars["error_message"] = u8"<span class=\"error\">" +
+                        SimpleTemplateProcessor::escapeHtml(dns.error_message) + u8"</span>";
                 }
 
-                .container {
-                    box - shadow: none !important;
-                    border - radius: 0 !important;
-                    padding: 20px !important;
+                dns_results_rows += SimpleTemplateProcessor::render(
+                    DiagnosticHTMLTemplates::DNS_RESULT_ROW_TEMPLATE, row_vars);
+            }
+            variables["dns_results_rows"] = dns_results_rows;
+
+            // 生成TCP连接测试结果表格行
+            std::string tcp_results_rows;
+            for (const auto& tcp : diagnostic_result.tcp_results) {
+                SimpleTemplateProcessor::Variables row_vars;
+                row_vars["target_host"] = SimpleTemplateProcessor::escapeHtml(tcp.target_host);
+                row_vars["target_port"] = std::to_string(tcp.target_port);
+                row_vars["connection_time"] = std::to_string(static_cast<int>(tcp.connection_time_ms));
+
+                if (tcp.success) {
+                    row_vars["status_html"] = u8"<span class=\"success\">连接成功</span>";
+                    row_vars["error_message"] = u8"-";
+                }
+                else {
+                    row_vars["status_html"] = u8"<span class=\"error\">连接失败</span>";
+                    row_vars["error_message"] = u8"<span class=\"error\">" +
+                        SimpleTemplateProcessor::escapeHtml(tcp.error_message) + u8"</span>";
                 }
 
-                h1, h2 {
-                    color: #000 !important;
-                    break - after: avoid;
+                tcp_results_rows += SimpleTemplateProcessor::render(
+                    DiagnosticHTMLTemplates::TCP_RESULT_ROW_TEMPLATE, row_vars);
+            }
+            variables["tcp_results_rows"] = tcp_results_rows;
+
+            // 生成路由表部分
+            std::string routing_table_section;
+            if (!diagnostic_result.routing_table.empty()) {
+                std::string routing_table_rows;
+                for (const auto& route : diagnostic_result.routing_table) {
+                    SimpleTemplateProcessor::Variables row_vars;
+                    row_vars["destination"] = SimpleTemplateProcessor::escapeHtml(route.destination);
+                    row_vars["netmask"] = SimpleTemplateProcessor::escapeHtml(route.netmask);
+                    row_vars["gateway"] = SimpleTemplateProcessor::escapeHtml(route.gateway);
+                    row_vars["route_interface"] = SimpleTemplateProcessor::escapeHtml(route.route_interface);
+                    row_vars["metric"] = std::to_string(route.metric);
+
+                    routing_table_rows += SimpleTemplateProcessor::render(
+                        DiagnosticHTMLTemplates::ROUTING_TABLE_ROW_TEMPLATE, row_vars);
                 }
 
-                table {
-                    break - inside: avoid;
-                    box - shadow: none !important;
-                }
+                SimpleTemplateProcessor::Variables section_vars;
+                section_vars["routing_table_rows"] = routing_table_rows;
+                routing_table_section = SimpleTemplateProcessor::render(
+                    DiagnosticHTMLTemplates::ROUTING_TABLE_SECTION_TEMPLATE, section_vars);
+            }
+            variables["routing_table_section"] = routing_table_section;
 
-                tr {
-                    break - inside: avoid;
-                }
+            // 生成诊断建议
+            std::string diagnostic_suggestions;
+            std::vector<std::string> suggestions;
+            bool has_network_issues = false;
 
-                .footer button {
-                    display: none !important;
-                }
+            // 检查连通性问题
+            if (successful_pings < static_cast<int>(diagnostic_result.ping_results.size()) / 2) {
+                has_network_issues = true;
+                suggestions.push_back(u8"🔴 网络连接异常：建议检查网络连接状态、防火墙设置或联系网络管理员");
+            }
 
-                .summary - grid {
-                    break - inside: avoid;
-                }
-        }
-            < / style>
-            < / body>
-            < / html> )";
+            // 检查DNS问题
+            if (successful_dns < static_cast<int>(diagnostic_result.dns_results.size()) / 2) {
+                has_network_issues = true;
+                suggestions.push_back(u8"🟡 DNS解析异常：建议更换DNS服务器(如8.8.8.8)或检查DNS配置");
+            }
 
-                
-            // 写入UTF-8字节流（无BOM）
+            // 检查TCP连接问题
+            if (successful_tcp < static_cast<int>(diagnostic_result.tcp_results.size()) / 2) {
+                has_network_issues = true;
+                suggestions.push_back(u8"🟠 TCP连接异常：建议检查目标服务器状态或端口可用性");
+            }
+
+            // 检查活跃接口
+            if (active_interfaces == 0) {
+                has_network_issues = true;
+                suggestions.push_back(u8"🔴 无活跃网络接口：请检查网络适配器驱动或物理连接");
+            }
+
+
+            if (!has_network_issues) {
+                diagnostic_suggestions = u8"<p style=\"color: #27ae60;\">🎉 网络状态良好！所有测试项目基本正常。</p>";
+            }
+            else {
+                diagnostic_suggestions = u8"<ul>";
+                for (const auto& suggestion : suggestions) {
+                    diagnostic_suggestions += u8"<li>" + SimpleTemplateProcessor::escapeHtml(suggestion) + u8"</li>";
+                }
+                diagnostic_suggestions += u8"</ul>";
+            }
+            variables["diagnostic_suggestions"] = diagnostic_suggestions;
+
+            // 渲染最终HTML
+            std::string html_content = SimpleTemplateProcessor::render(
+                DiagnosticHTMLTemplates::DIAGNOSTIC_REPORT_TEMPLATE, variables);
+
+            // 写入文件
+            std::ofstream file(output_path, std::ios::out | std::ios::binary);
+            if (!file.is_open()) {
+                return DiagnosticResult(DiagnosticErrorCode::FILE_CREATE_FAILED,
+                    "Failed to create HTML report file: " + output_path);
+            }
+
             file.write(html_content.c_str(), html_content.length());
-        file.close();
+            file.close();
 
-        return DiagnosticResult(DiagnosticErrorCode::SUCCESS,
-            "Enhanced HTML report generated successfully (UTF-8 without BOM): " + output_path);
+            return DiagnosticResult(DiagnosticErrorCode::SUCCESS,
+                "Enhanced HTML report generated successfully: " + output_path);
+        }
+        catch (const std::exception& e) {
+            return DiagnosticResult(DiagnosticErrorCode::SYSTEM_UNKNOWN_ERROR,
+                "Exception occurred while generating HTML report: " + std::string(e.what()));
+        }
     }
 };
 

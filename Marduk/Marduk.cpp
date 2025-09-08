@@ -724,7 +724,7 @@ void handleDiagnose() {
     };
     config.tcp_test_targets = {
         {"baidu.com", 80}, {"baidu.com", 443},
-        {"www.xidian.edu.cn", 80}, {"www.xidian.edu.cn", 443},
+        {"w.xidian.edu.cn", 80}, {"w.xidian.edu.cn", 443},
         {"github.com", 80}, {"github.com", 443}
     };
 
@@ -732,7 +732,6 @@ void handleDiagnose() {
     std::wcout << L"[3/4] 正在执行DNS解析测试..." << std::endl;
     std::wcout << L"[4/4] 正在执行TCP连接测试..." << std::endl;
 
-    // 执行完整诊断
     DiagnosticResult result = g_networkDiagnostic->runFullDiagnostic(config);
 
     if (!result.isSuccess()) {

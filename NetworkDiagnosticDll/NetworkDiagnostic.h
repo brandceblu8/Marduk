@@ -118,7 +118,7 @@ struct NETWORKDIAGNOSTIC_API DiagnosticConfig {
     };
     std::vector<std::string> dns_test_domains = {
         "baidu.com", "google.com", "github.com",
-        "xidian.edu.cn"
+        "w.xidian.edu.cn"
     };
     std::vector<std::pair<std::string, int>> tcp_test_targets = {
         {"baidu.com", 80}, {"baidu.com", 443},
@@ -147,6 +147,8 @@ struct NETWORKDIAGNOSTIC_API DiagnosticResult {
     std::vector<PingResult> ping_results;
     std::vector<DnsQueryResult> dns_results;
     std::vector<TcpConnectionResult> tcp_results;
+
+	std::string suggestions;
 
     DiagnosticResult(DiagnosticErrorCode code = DiagnosticErrorCode::SUCCESS,
         const std::string& message = "")

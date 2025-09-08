@@ -58,11 +58,9 @@ private:
     std::string processTemplate(const std::string& template_content, const TemplateVariables& variables) {
         std::string result = template_content;
 
-        // 合并全局变量和局部变量
         TemplateVariables all_variables = global_variables;
         all_variables.insert(variables.begin(), variables.end());
 
-        // 处理简单变量替换 {{variable_name}}
         std::regex var_regex(R"(\{\{([^}]+)\}\})");
         std::smatch match;
 
@@ -78,10 +76,8 @@ private:
             result.replace(match.position(), match.length(), replacement);
         }
 
-        // 处理条件语句 {{#if condition}}...{{/if}}
         result = processConditionals(result, all_variables);
 
-        // 处理函数调用 {{function_name(param)}}
         result = processFunctions(result, all_variables);
 
         return result;
@@ -90,7 +86,6 @@ private:
     std::string processConditionals(const std::string& content, const TemplateVariables& variables) {
         std::string result = content;
 
-        // 处理 {{#if variable}}...{{/if}}
         std::regex if_regex(R"(\{\{#if\s+([^}]+)\}\}(.*?)\{\{/if\}\})");
         std::smatch match;
 
@@ -99,7 +94,6 @@ private:
             std::string if_content = match[2].str();
             std::string replacement = "";
 
-            // 检查条件
             auto var_it = variables.find(condition);
             if (var_it != variables.end() && !var_it->second.empty() && var_it->second != "0" && var_it->second != "false") {
                 replacement = if_content;

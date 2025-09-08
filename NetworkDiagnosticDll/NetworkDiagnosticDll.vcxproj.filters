@@ -13,9 +13,6 @@
       <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
       <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
     </Filter>
-    <Filter Include="templates">
-      <UniqueIdentifier>{72f1d89b-5088-4182-9dc4-84694b393a6a}</UniqueIdentifier>
-    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="framework.h">
@@ -28,6 +25,12 @@
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="HtmlTemplateManager.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="DiagnosticHTMLTemplates.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="SimpleTemplateProcessor.h">
       <Filter>头文件</Filter>
     </ClInclude>
   </ItemGroup>
@@ -44,10 +47,5 @@
     <ClCompile Include="HtmlTemplateManager.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
-  </ItemGroup>
-  <ItemGroup>
-    <None Include="diagnostic_report.html">
-      <Filter>templates</Filter>
-    </None>
   </ItemGroup>
 </Project>
