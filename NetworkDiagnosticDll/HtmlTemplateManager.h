@@ -10,24 +10,19 @@
 // HTML模板管理器
 class HtmlTemplateManager {
 public:
-    // 模板变量类型
     using TemplateVariables = std::map<std::string, std::string>;
     using TemplateFunction = std::function<std::string(const TemplateVariables&)>;
 
     HtmlTemplateManager();
     ~HtmlTemplateManager();
 
-    // 加载模板（从字符串或文件）
     bool loadTemplate(const std::string& template_name, const std::string& template_content);
     bool loadTemplateFromFile(const std::string& template_name, const std::string& file_path);
 
-    // 渲染模板
     std::string render(const std::string& template_name, const TemplateVariables& variables = {});
 
-    // 注册自定义函数
     void registerFunction(const std::string& function_name, TemplateFunction func);
 
-    // 设置全局变量
     void setGlobalVariable(const std::string& key, const std::string& value);
 
     // 渲染循环（用于表格等重复内容）

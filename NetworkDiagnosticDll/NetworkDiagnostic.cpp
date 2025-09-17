@@ -3,6 +3,7 @@
 #include "HtmlTemplateManager.h"
 #include "DiagnosticHTMLTemplates.h"
 #include "SimpleTemplateProcessor.h"
+#include "ThreadPool.h"
 #include <Windows.h>
 #include <winsock2.h>
 #include <ws2tcpip.h>
@@ -18,6 +19,7 @@
 #include <thread>
 #include <regex>
 #include <iomanip>
+#include <future>
 
 // 定义宏以允许使用废弃的Winsock API（临时解决方案）
 #ifndef _WINSOCK_DEPRECATED_NO_WARNINGS
@@ -119,6 +121,7 @@ public:
 class NetworkDiagnostic::NetworkDiagnosticImpl {
 private:
     std::unique_ptr<ICMPHelper> icmpHelper;
+    std::unique_ptr<ThreadPool> thread_pool;
     std::map<int, std::string> pppoe_error_suggestions = {
         {678, u8"🔴 PPPoE错误678：远程计算机没有响应 - 检查网线连接、联系运营商或重启光猫"},
         {691, u8"🔴 PPPoE错误691：用户名或密码错误 - 请检查账号密码是否正确"},
@@ -133,12 +136,212 @@ public:
     NetworkDiagnosticImpl() {
         WSADATA wsaData;
         WSAStartup(MAKEWORD(2, 2), &wsaData);
+
         try {
             icmpHelper = std::make_unique<ICMPHelper>();
         }
         catch (...) {
             icmpHelper = nullptr;
         }
+
+        size_t thread_count = std::max<size_t>(4u, std::thread::hardware_concurrency() * 2);
+        thread_pool = std::make_unique<ThreadPool>(thread_count);
+    }
+
+    DiagnosticResult pingTestParallelImpl(const std::vector<std::string>& targets, std::vector<PingResult>& results) {
+        results.clear();
+        results.resize(targets.size());
+
+        std::vector<std::future<DiagnosticResult>> futures;
+
+        // 为每个目标创建异步任务
+        for (size_t i = 0; i < targets.size(); ++i) {
+            futures.push_back(thread_pool->enqueue([this, &targets, &results, i]() -> DiagnosticResult {
+                return icmpApiPing(targets[i], results[i]);
+                }));
+        }
+
+        // 等待所有任务完成
+        for (auto& future : futures) {
+            try {
+                auto result = future.get();
+                // 可以在这里处理单个ping的错误，但不影响整体流程
+            }
+            catch (const std::exception& e) {
+                // 记录异常但继续处理其他任务
+            }
+        }
+
+        return DiagnosticResult(DiagnosticErrorCode::SUCCESS,
+            "Parallel ping test completed for " + std::to_string(targets.size()) + " targets");
+    }
+
+    DiagnosticResult dnsTestParallelImpl(const std::vector<std::string>& domains, std::vector<DnsQueryResult>& results) {
+        results.clear();
+        results.resize(domains.size());
+
+        std::vector<std::future<void>> futures;
+
+        // 为每个域名创建异步任务
+        for (size_t i = 0; i < domains.size(); ++i) {
+            futures.push_back(thread_pool->enqueue([this, &domains, &results, i]() {
+                DnsQueryResult& result = results[i];
+                result.hostname = domains[i];
+
+                auto start_time = std::chrono::high_resolution_clock::now();
+
+                // 使用Windows DNS API查询
+                PDNS_RECORD pDnsRecord;
+                DNS_STATUS status = DnsQuery_A(domains[i].c_str(), DNS_TYPE_A, DNS_QUERY_STANDARD,
+                    NULL, &pDnsRecord, NULL);
+
+                auto end_time = std::chrono::high_resolution_clock::now();
+                result.query_time_ms = std::chrono::duration<double, std::milli>(end_time - start_time).count();
+
+                if (status == 0 && pDnsRecord) {
+                    result.success = true;
+
+                    PDNS_RECORD pNext = pDnsRecord;
+                    while (pNext) {
+                        if (pNext->wType == DNS_TYPE_A) {
+                            result.ip_addresses.push_back(ipv4ToString(pNext->Data.A.IpAddress));
+                        }
+                        pNext = pNext->pNext;
+                    }
+
+                    DnsRecordListFree(pDnsRecord, DnsFreeRecordList);
+                }
+                else {
+                    result.success = false;
+                    result.error_message = "DNS query failed with status: " + std::to_string(status);
+                }
+
+                result.dns_server_used = "System Default";
+                }));
+        }
+
+        // 等待所有任务完成
+        for (auto& future : futures) {
+            try {
+                future.get();
+            }
+            catch (const std::exception& e) {
+                // 记录异常但继续处理
+            }
+        }
+
+        return DiagnosticResult(DiagnosticErrorCode::SUCCESS,
+            "Parallel DNS test completed for " + std::to_string(domains.size()) + " domains");
+    }
+
+    DiagnosticResult tcpTestParallelImpl(const std::vector<std::pair<std::string, int>>& targets,
+        std::vector<TcpConnectionResult>& results) {
+        results.clear();
+        results.resize(targets.size());
+
+        std::vector<std::future<void>> futures;
+
+        // 为每个TCP连接创建异步任务
+        for (size_t i = 0; i < targets.size(); ++i) {
+            futures.push_back(thread_pool->enqueue([this, &targets, &results, i]() {
+                TcpConnectionResult& result = results[i];
+                result.target_host = targets[i].first;
+                result.target_port = targets[i].second;
+
+                auto start_time = std::chrono::high_resolution_clock::now();
+
+                // 创建套接字
+                SOCKET sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+                if (sock == INVALID_SOCKET) {
+                    result.success = false;
+                    result.error_message = "Failed to create socket";
+                    return;
+                }
+
+                // 设置非阻塞模式以支持超时
+                u_long mode = 1;
+                ioctlsocket(sock, FIONBIO, &mode);
+
+                // 解析主机名
+                struct addrinfo* addr_result = NULL;
+                struct addrinfo hints;
+                ZeroMemory(&hints, sizeof(hints));
+                hints.ai_family = AF_INET;
+                hints.ai_socktype = SOCK_STREAM;
+
+                std::string port_str = std::to_string(targets[i].second);
+                int getaddr_result = getaddrinfo(targets[i].first.c_str(), port_str.c_str(), &hints, &addr_result);
+
+                if (getaddr_result != 0) {
+                    result.success = false;
+                    result.error_message = "Failed to resolve hostname";
+                    closesocket(sock);
+                    return;
+                }
+
+                // 尝试连接
+                int connect_result = connect(sock, addr_result->ai_addr, (int)addr_result->ai_addrlen);
+
+                if (connect_result == SOCKET_ERROR) {
+                    int error = WSAGetLastError();
+                    if (error == WSAEWOULDBLOCK) {
+                        // 使用select等待连接完成，设置5秒超时
+                        fd_set write_fds;
+                        FD_ZERO(&write_fds);
+                        FD_SET(sock, &write_fds);
+
+                        struct timeval timeout;
+                        timeout.tv_sec = 5;
+                        timeout.tv_usec = 0;
+
+                        int select_result = select(0, NULL, &write_fds, NULL, &timeout);
+                        if (select_result > 0) {
+                            // 检查连接是否真的成功
+                            int so_error;
+                            int len = sizeof(so_error);
+                            getsockopt(sock, SOL_SOCKET, SO_ERROR, (char*)&so_error, &len);
+
+                            if (so_error == 0) {
+                                result.success = true;
+                            }
+                            else {
+                                result.success = false;
+                                result.error_message = "Connection failed with error: " + std::to_string(so_error);
+                            }
+                        }
+                        else {
+                            result.success = false;
+                            result.error_message = "Connection timeout";
+                        }
+                    }
+                    else {
+                        result.success = false;
+                        result.error_message = "Connection failed with error: " + std::to_string(error);
+                    }
+                }
+                else {
+                    result.success = true;
+                }
+
+                auto end_time = std::chrono::high_resolution_clock::now();
+                result.connection_time_ms = std::chrono::duration<double, std::milli>(end_time - start_time).count();
+
+                freeaddrinfo(addr_result);
+                closesocket(sock);
+                }));
+        }
+
+        for (auto& future : futures) {
+            try {
+                future.get();
+            }
+            catch (const std::exception& e) {
+
+            }
+        }
+
+        return DiagnosticResult(DiagnosticErrorCode::SUCCESS,
+            "Parallel TCP test completed for " + std::to_string(targets.size()) + " targets");
     }
 
     ~NetworkDiagnosticImpl() {
@@ -404,12 +607,6 @@ public:
         result.target = target;
         result.success = false;
 
-        if (!icmpHelper) {
-            result.error_message = "ICMP Helper not initialized";
-            return DiagnosticResult(DiagnosticErrorCode::NETWORK_PING_FAILED,
-                "ICMP Helper not initialized");
-        }
-
         if (!icmpHelper->IsAvailable()) {
             return DiagnosticResult(DiagnosticErrorCode::NETWORK_PING_FAILED,
                 "ICMP API not available");
@@ -535,7 +732,6 @@ public:
                 PDNS_RECORD pNext = pDnsRecord;
                 while (pNext) {
                     if (pNext->wType == DNS_TYPE_A) {
-                        // 使用现代的IP地址转换
                         result.ip_addresses.push_back(ipv4ToString(pNext->Data.A.IpAddress));
                     }
                     pNext = pNext->pNext;
@@ -569,7 +765,6 @@ public:
 
             auto start_time = std::chrono::high_resolution_clock::now();
 
-            // 创建套接字
             SOCKET sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
             if (sock == INVALID_SOCKET) {
                 result.success = false;
@@ -639,7 +834,7 @@ public:
         // 代理配置失败不是致命错误，继续执行
 
         auto routing_result = getRoutingTableImpl(result.routing_table);
-        // 路由表获取失败也不是致命错误
+        // 路由表获取失败不是致命错误
 
         // 执行网络测试
         auto ping_result = pingTestImpl(config.ping_targets, result.ping_results);
@@ -650,6 +845,52 @@ public:
 
         result.error_code = DiagnosticErrorCode::SUCCESS;
         result.error_message = "Full diagnostic completed successfully";
+
+        return result;
+    }
+
+    DiagnosticResult runFullDiagnosticParallelImpl(const DiagnosticConfig& config) {
+        DiagnosticResult result;
+        result.timestamp = getCurrentTimestamp();
+        result.system_info = getSystemInfo();
+
+        // 创建异步任务来并行执行不同类型的测试
+        std::vector<std::future<DiagnosticResult>> diagnostic_futures;
+
+        auto interfaces_result = getNetworkInterfacesImpl(result.network_interfaces);
+        if (!interfaces_result.isSuccess()) {
+            return interfaces_result;
+        }
+
+        auto proxy_result = getProxyConfigImpl(result.proxy_config);
+        auto routing_result = getRoutingTableImpl(result.routing_table);
+
+        // 并行执行网络测试
+        auto ping_future = std::async(std::launch::async, [this, &config, &result]() {
+            return pingTestParallelImpl(config.ping_targets, result.ping_results);
+            });
+
+        auto dns_future = std::async(std::launch::async, [this, &config, &result]() {
+            return dnsTestParallelImpl(config.dns_test_domains, result.dns_results);
+            });
+
+        auto tcp_future = std::async(std::launch::async, [this, &config, &result]() {
+            return tcpTestParallelImpl(config.tcp_test_targets, result.tcp_results);
+            });
+
+        // 等待所有网络测试完成
+        try {
+            ping_future.get();
+            dns_future.get();
+            tcp_future.get();
+        }
+        catch (const std::exception& e) {
+            return DiagnosticResult(DiagnosticErrorCode::SYSTEM_UNKNOWN_ERROR,
+                "Exception during parallel diagnostic: " + std::string(e.what()));
+        }
+
+        result.error_code = DiagnosticErrorCode::SUCCESS;
+        result.error_message = "Parallel full diagnostic completed successfully";
 
         return result;
     }
@@ -761,7 +1002,7 @@ public:
 
     DiagnosticResult generateHTMLReportImpl(const DiagnosticResult& diagnostic_result, const std::string& output_path) {
         try {
-            // 准备模板变量
+            // 模板，放弃原先引擎，因为NCC不会做
             SimpleTemplateProcessor::Variables variables;
 
             // 基本信息
@@ -769,7 +1010,7 @@ public:
             variables["version"] = u8"西电校园网辅助工具 v1.0";
             variables["system_info"] = SimpleTemplateProcessor::escapeHtml(diagnostic_result.system_info);
 
-            // 计算统计数据
+            // 统计数据
             int active_interfaces = 0;
             for (const auto& iface : diagnostic_result.network_interfaces) {
                 if (iface.is_enabled && iface.ip_address != "0.0.0.0") {
@@ -801,7 +1042,7 @@ public:
             variables["summary_successful_tcp"] = std::to_string(successful_tcp);
             variables["summary_total_tcp"] = std::to_string(diagnostic_result.tcp_results.size());
 
-            // 生成网络接口表格行
+            //网络接口表格行
             std::string network_interfaces_rows;
             for (const auto& iface : diagnostic_result.network_interfaces) {
                 SimpleTemplateProcessor::Variables row_vars;
@@ -825,7 +1066,7 @@ public:
             }
             variables["network_interfaces_rows"] = network_interfaces_rows;
 
-            // 生成代理配置内容
+            //代理配置内容
             std::string proxy_config_content;
             if (diagnostic_result.proxy_config.proxy_enabled) {
                 proxy_config_content += u8"<p><strong>🔧 代理状态:</strong> <span class=\"success\">已启用</span></p>\n";
@@ -851,7 +1092,7 @@ public:
             }
             variables["proxy_config_content"] = proxy_config_content;
 
-            // 生成Ping测试结果表格行
+            //Ping测试结果表格行
             std::string ping_results_rows;
             for (const auto& ping : diagnostic_result.ping_results) {
                 SimpleTemplateProcessor::Variables row_vars;
@@ -880,7 +1121,7 @@ public:
             }
             variables["ping_results_rows"] = ping_results_rows;
 
-            // 生成DNS测试结果表格行
+            //DNS测试结果表格行
             std::string dns_results_rows;
             for (const auto& dns : diagnostic_result.dns_results) {
                 SimpleTemplateProcessor::Variables row_vars;
@@ -915,7 +1156,7 @@ public:
             }
             variables["dns_results_rows"] = dns_results_rows;
 
-            // 生成TCP连接测试结果表格行
+            //TCP连接测试结果表格行
             std::string tcp_results_rows;
             for (const auto& tcp : diagnostic_result.tcp_results) {
                 SimpleTemplateProcessor::Variables row_vars;
@@ -938,7 +1179,7 @@ public:
             }
             variables["tcp_results_rows"] = tcp_results_rows;
 
-            // 生成路由表部分
+            //路由表部分
             std::string routing_table_section;
             if (!diagnostic_result.routing_table.empty()) {
                 std::string routing_table_rows;
@@ -961,7 +1202,7 @@ public:
             }
             variables["routing_table_section"] = routing_table_section;
 
-            // 生成诊断建议
+            //诊断建议
             std::string diagnostic_suggestions;
             std::vector<std::string> suggestions;
             bool has_network_issues = false;
@@ -1035,7 +1276,7 @@ NetworkDiagnostic::NetworkDiagnostic()
 NetworkDiagnostic::~NetworkDiagnostic() = default;
 
 DiagnosticResult NetworkDiagnostic::runFullDiagnostic(const DiagnosticConfig& config) {
-    return impl->runFullDiagnosticImpl(config);
+    return impl->runFullDiagnosticParallelImpl(config);
 }
 
 DiagnosticResult NetworkDiagnostic::getNetworkInterfaces(std::vector<NetworkInterface>& interfaces) {
@@ -1051,15 +1292,15 @@ DiagnosticResult NetworkDiagnostic::getRoutingTable(std::vector<RouteInfo>& rout
 }
 
 DiagnosticResult NetworkDiagnostic::pingTest(const std::vector<std::string>& targets, std::vector<PingResult>& results) {
-    return impl->pingTestImpl(targets, results);
+    return impl->pingTestParallelImpl(targets, results);
 }
 
 DiagnosticResult NetworkDiagnostic::dnsTest(const std::vector<std::string>& domains, std::vector<DnsQueryResult>& results) {
-    return impl->dnsTestImpl(domains, results);
+    return impl->dnsTestParallelImpl(domains, results);
 }
 
 DiagnosticResult NetworkDiagnostic::tcpTest(const std::vector<std::pair<std::string, int>>& targets, std::vector<TcpConnectionResult>& results) {
-    return impl->tcpTestImpl(targets, results);
+    return impl->tcpTestParallelImpl(targets, results);
 }
 
 DiagnosticResult NetworkDiagnostic::generateReport(const DiagnosticResult& result, const std::string& output_path) {
