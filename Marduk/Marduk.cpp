@@ -12,7 +12,9 @@
 #include <fcntl.h>
 #include <iomanip>
 #include <chrono>
+#include <WinInet.h>
 
+#pragma comment(lib, "Wininet.lib")
 #pragma comment(lib, "NetworkDiagnosticDll.lib")
 
 #include "../ZfwInteractionDll/ZfwManager.h"
@@ -67,6 +69,8 @@ void handleDnsList();
 void handleDnsClear();
 void handlePasopt();
 void handleDiagnose();
+
+void handleProxyReset();
 std::wstring get_executable_dir();
 void initializeManagers();
 
@@ -134,7 +138,7 @@ bool requestElevation() {
         // 以管理员权限重新启动
         SHELLEXECUTEINFO sei = { 0 };
         sei.cbSize = sizeof(sei);
-        sei.lpVerb = L"runas";  // 请求管理员权限
+        sei.lpVerb = L"runas";
         sei.lpFile = szPath;
         sei.nShow = SW_SHOWNORMAL;
         sei.fMask = SEE_MASK_NOCLOSEPROCESS;
@@ -232,6 +236,7 @@ int wmain(int argc, wchar_t* argv[]) {
         else if (command == L"dnsclear") handleDnsClear();
         else if (command == L"pasopt") handlePasopt();
         else if (command == L"diagno") handleDiagnose();
+		else if (command == L"proxyreset") handleProxyReset();
         else if (command == L"exit" || command == L"quit") break;
         else if (command.empty()) {}
         else {
@@ -888,6 +893,42 @@ void handleDiagnose() {
     else {
         std::wcout << L"\n❌ 报告生成失败，请检查磁盘空间和文件权限。" << std::endl;
     }
+}
+
+void handleProxyReset() {
+    std::wcout << L"--- 重置系统代理设置 ---\n";
+    std::wcout << L"正在尝试清除代理配置并恢复直连模式...\n";
+
+    INTERNET_PER_CONN_OPTION_LIST list;
+    DWORD dwBufSize = sizeof(list);
+
+    list.dwSize = sizeof(list);
+    list.pszConnection = NULL;
+    list.dwOptionCount = 1;
+    list.dwOptionError = 0;
+
+    list.pOptions = new INTERNET_PER_CONN_OPTION[list.dwOptionCount];
+    if (!list.pOptions) {
+        std::wcout << L"❌ 内存分配失败。" << std::endl; // NCC认为不太可能，之后可以删了
+        return;
+    }
+
+    list.pOptions[0].dwOption = INTERNET_PER_CONN_FLAGS;
+    list.pOptions[0].Value.dwValue = PROXY_TYPE_DIRECT;
+
+    if (!InternetSetOption(NULL, INTERNET_OPTION_PER_CONNECTION_OPTION, &list, dwBufSize)) {
+        std::wcout << L"❌ 代理设置应用失败，错误码: " << GetLastError() << std::endl;
+        delete[] list.pOptions;
+        return;
+    }
+
+    delete[] list.pOptions;
+
+    InternetSetOption(NULL, INTERNET_OPTION_SETTINGS_CHANGED, NULL, 0);
+    InternetSetOption(NULL, INTERNET_OPTION_REFRESH, NULL, 0);
+
+    std::wcout << L"✅ 成功！系统代理已关闭，网络应已恢复直连。" << std::endl;
+    std::wcout << L"💡 如果浏览器仍有问题，请尝试刷新页面或重启浏览器。" << std::endl;
 }
 
 
