@@ -676,6 +676,7 @@ void displayDiagnosticSummary(const DiagnosticResult& result) {
 
 // 辅助函数：从 config.toml 加载诊断配置
 // 如果加载失败，返回 false 并使用硬编码的默认值
+// TODO: 真神了，NCC发现config居然还老是不为空，而且NCC笃定这个原因就在这个函数里面，但是还没找到问题。
 bool loadDiagnosticConfig(DiagnosticConfig& config, std::wstring& error_message) {
     try {
         std::filesystem::path exe_dir = get_executable_dir();
@@ -752,8 +753,6 @@ void handleDiagnose() {
     std::wcout << L"=== 网络诊断工具 ===" << std::endl;
     std::wcout << L"正在执行全面网络诊断，这可能需要几分钟时间..." << std::endl;
     std::wcout << L"请稍候..." << std::endl;
-
-    
 
     DiagnosticConfig config;
     std::wstring config_load_msg;

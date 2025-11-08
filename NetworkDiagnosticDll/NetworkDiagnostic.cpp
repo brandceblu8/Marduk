@@ -46,31 +46,31 @@ private:
     bool initialization_success;
 
 public:
-    ICMPHelper() : hIcmpDll(nullptr), pIcmpCreateFile(nullptr),
-        pIcmpCloseHandle(nullptr), pIcmpSendEcho(nullptr),
-        initialization_success(false) {
-        try {
-            // 尝试加载ICMP.DLL
-            hIcmpDll = LoadLibraryA("ICMP.DLL");
-            if (hIcmpDll) {
-                pIcmpCreateFile = (IcmpCreateFileFunc)GetProcAddress(hIcmpDll, "IcmpCreateFile");
-                pIcmpCloseHandle = (IcmpCloseHandleFunc)GetProcAddress(hIcmpDll, "IcmpCloseHandle");
-                pIcmpSendEcho = (IcmpSendEchoFunc)GetProcAddress(hIcmpDll, "IcmpSendEcho");
+    //ICMPHelper() : hIcmpDll(nullptr), pIcmpCreateFile(nullptr),
+    //    pIcmpCloseHandle(nullptr), pIcmpSendEcho(nullptr),
+    //    initialization_success(false) {
+    //    try {
+    //        // 尝试加载ICMP.DLL
+    //        hIcmpDll = LoadLibraryA("ICMP.DLL");
+    //        if (hIcmpDll) {
+    //            pIcmpCreateFile = (IcmpCreateFileFunc)GetProcAddress(hIcmpDll, "IcmpCreateFile");
+    //            pIcmpCloseHandle = (IcmpCloseHandleFunc)GetProcAddress(hIcmpDll, "IcmpCloseHandle");
+    //            pIcmpSendEcho = (IcmpSendEchoFunc)GetProcAddress(hIcmpDll, "IcmpSendEcho");
 
-                // 检查所有函数是否成功加载
-                if (pIcmpCreateFile && pIcmpCloseHandle && pIcmpSendEcho) {
-                    initialization_success = true;
-                }
-            }
-        }
-        catch (...) {
-            cleanup();
-        }
-    }
+    //            // 检查所有函数是否成功加载
+    //            if (pIcmpCreateFile && pIcmpCloseHandle && pIcmpSendEcho) {
+    //                initialization_success = true;
+    //            }
+    //        }
+    //    }
+    //    catch (...) {
+    //        cleanup();
+    //    }
+    //}
 
-    ~ICMPHelper() {
-        cleanup();
-    }
+    //~ICMPHelper() {
+    //    cleanup();
+    //}
 
 private:
     void cleanup() {
@@ -120,7 +120,7 @@ public:
 
 class NetworkDiagnostic::NetworkDiagnosticImpl {
 private:
-    std::unique_ptr<ICMPHelper> icmpHelper;
+    //std::unique_ptr<ICMPHelper> icmpHelper;
     std::unique_ptr<ThreadPool> thread_pool;
     std::map<int, std::string> pppoe_error_suggestions = {
         {678, u8"🔴 PPPoE错误678：远程计算机没有响应 - 检查网线连接、联系运营商或重启光猫"},
@@ -137,12 +137,12 @@ public:
         WSADATA wsaData;
         WSAStartup(MAKEWORD(2, 2), &wsaData);
 
-        try {
-            icmpHelper = std::make_unique<ICMPHelper>();
-        }
-        catch (...) {
-            icmpHelper = nullptr;
-        }
+        //try {
+        //    icmpHelper = std::make_unique<ICMPHelper>();
+        //}
+        //catch (...) {
+        //    icmpHelper = nullptr;
+        //}
 
         size_t thread_count = std::max<size_t>(4u, std::thread::hardware_concurrency() * 2);
         thread_pool = std::make_unique<ThreadPool>(thread_count);
@@ -165,10 +165,9 @@ public:
         for (auto& future : futures) {
             try {
                 auto result = future.get();
-                // 可以在这里处理单个ping的错误，但不影响整体流程
             }
             catch (const std::exception& e) {
-                // 记录异常但继续处理其他任务
+                // 抓住了但是不说
             }
         }
 
@@ -426,7 +425,6 @@ public:
             return std::string(buffer);
         }
         else {
-            // 降级方案：手动转换
             unsigned char* bytes = (unsigned char*)&ipAddress;
             std::ostringstream oss;
             oss << (int)bytes[0] << "." << (int)bytes[1] << "."
@@ -587,7 +585,6 @@ public:
 
             RouteInfo route;
 
-            // 使用现代的IP地址转换函数
             route.destination = ipv4ToString(pRow->dwForwardDest);
             route.netmask = ipv4ToString(pRow->dwForwardMask);
             route.gateway = ipv4ToString(pRow->dwForwardNextHop);
@@ -607,12 +604,12 @@ public:
         result.target = target;
         result.success = false;
 
-        if (!icmpHelper->IsAvailable()) {
+        /*if (!icmpHelper->IsAvailable()) {
             return DiagnosticResult(DiagnosticErrorCode::NETWORK_PING_FAILED,
                 "ICMP API not available");
-        }
+        }*/
 
-        HANDLE hIcmpFile = icmpHelper->CreateFile();
+        HANDLE hIcmpFile = IcmpCreateFile();
         if (hIcmpFile == INVALID_HANDLE_VALUE) {
             return DiagnosticResult(DiagnosticErrorCode::NETWORK_PING_FAILED,
                 "Unable to create ICMP handle");
@@ -636,7 +633,8 @@ public:
         }
 
         if (ipaddr == INADDR_NONE) {
-            icmpHelper->CloseHandle(hIcmpFile);
+            //icmpHelper->CloseHandle(hIcmpFile);
+            IcmpCloseHandle(hIcmpFile);
             result.error_message = "Could not resolve hostname";
             return DiagnosticResult(DiagnosticErrorCode::NETWORK_PING_FAILED,
                 "Hostname resolution failed");
@@ -647,7 +645,8 @@ public:
         LPVOID ReplyBuffer = (VOID*)malloc(ReplySize);
 
         if (!ReplyBuffer) {
-            icmpHelper->CloseHandle(hIcmpFile);
+            /*icmpHelper->CloseHandle(hIcmpFile);*/
+			IcmpCloseHandle(hIcmpFile);
             return DiagnosticResult(DiagnosticErrorCode::SYSTEM_NETWORK_INFO_FAILED,
                 "Memory allocation failed");
         }
@@ -657,7 +656,7 @@ public:
         const int ping_count = 4;
 
         for (int i = 0; i < ping_count; i++) {
-            DWORD dwRetVal = icmpHelper->SendEcho(hIcmpFile, ipaddr, SendData, sizeof(SendData),
+            DWORD dwRetVal = IcmpSendEcho(hIcmpFile, ipaddr, SendData, sizeof(SendData),
                 NULL, ReplyBuffer, ReplySize, 3000);
 
             if (dwRetVal != 0) {
@@ -667,7 +666,7 @@ public:
                     successful_pings++;
                 }
             }
-            Sleep(100); // 间隔100ms
+            // Sleep(100);
         }
 
         if (successful_pings > 0) {
@@ -684,7 +683,8 @@ public:
         }
 
         free(ReplyBuffer);
-        icmpHelper->CloseHandle(hIcmpFile);
+        /*icmpHelper->CloseHandle(hIcmpFile);*/
+        IcmpCloseHandle(hIcmpFile);
 
         return DiagnosticResult(DiagnosticErrorCode::SUCCESS, "ICMP API ping completed");
     }
@@ -701,7 +701,7 @@ public:
 
             // 如果有严重错误，记录但继续处理其他目标
             if (!ping_result.isSuccess() && ping_result.error_code != DiagnosticErrorCode::NETWORK_PING_FAILED) {
-                // 可以在这里记录警告，但继续处理其他目标
+                
             }
         }
 
@@ -774,7 +774,7 @@ public:
             }
 
             // 设置超时
-            DWORD timeout = 5000; // 5秒
+            DWORD timeout = 5000;
             setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (char*)&timeout, sizeof(timeout));
             setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, (char*)&timeout, sizeof(timeout));
 
@@ -796,7 +796,6 @@ public:
                 continue;
             }
 
-            // 尝试连接
             int connect_result = connect(sock, addr_result->ai_addr, (int)addr_result->ai_addrlen);
 
             auto end_time = std::chrono::high_resolution_clock::now();
@@ -905,11 +904,9 @@ public:
         file << "===== 网络诊断报告 =====\n";
         file << "生成时间: " << diagnostic_result.timestamp << "\n\n";
 
-        // 系统信息
         file << "=== 系统信息 ===\n";
         file << diagnostic_result.system_info << "\n";
 
-        // 网络接口
         file << "=== 网络接口 ===\n";
         for (const auto& iface : diagnostic_result.network_interfaces) {
             file << "接口: " << iface.description << "\n";
@@ -922,7 +919,6 @@ public:
             file << "  状态: " << (iface.is_enabled ? "启用" : "禁用") << "\n\n";
         }
 
-        // 代理配置
         file << "=== 代理配置 ===\n";
         file << "代理启用: " << (diagnostic_result.proxy_config.proxy_enabled ? "是" : "否") << "\n";
         if (diagnostic_result.proxy_config.proxy_enabled) {
@@ -935,7 +931,6 @@ public:
         }
         file << "\n";
 
-        // Ping测试结果
         file << "=== Ping 测试结果 ===\n";
         for (const auto& ping : diagnostic_result.ping_results) {
             file << "目标: " << ping.target << "\n";
@@ -952,7 +947,6 @@ public:
             file << "\n";
         }
 
-        // DNS测试结果
         file << "=== DNS 测试结果 ===\n";
         for (const auto& dns : diagnostic_result.dns_results) {
             file << "域名: " << dns.hostname << "\n";
@@ -971,7 +965,6 @@ public:
             file << "\n";
         }
 
-        // TCP连接测试结果
         file << "=== TCP 连接测试结果 ===\n";
         for (const auto& tcp : diagnostic_result.tcp_results) {
             file << "目标: " << tcp.target_host << ":" << tcp.target_port << "\n";
@@ -983,7 +976,6 @@ public:
             file << "\n";
         }
 
-        // 路由表
         file << "=== 路由表 ===\n";
         file << "目标地址\t\t子网掩码\t\t网关\t\t接口\t跃点数\n";
         for (const auto& route : diagnostic_result.routing_table) {
@@ -1005,12 +997,10 @@ public:
             // 模板，放弃原先引擎，因为NCC不会做
             SimpleTemplateProcessor::Variables variables;
 
-            // 基本信息
             variables["timestamp"] = diagnostic_result.timestamp;
             variables["version"] = u8"西电校园网辅助工具 v1.0";
             variables["system_info"] = SimpleTemplateProcessor::escapeHtml(diagnostic_result.system_info);
 
-            // 统计数据
             int active_interfaces = 0;
             for (const auto& iface : diagnostic_result.network_interfaces) {
                 if (iface.is_enabled && iface.ip_address != "0.0.0.0") {
@@ -1033,7 +1023,6 @@ public:
                 if (tcp.success) successful_tcp++;
             }
 
-            // 摘要统计
             variables["summary_active_interfaces"] = std::to_string(active_interfaces);
             variables["summary_successful_pings"] = std::to_string(successful_pings);
             variables["summary_total_pings"] = std::to_string(diagnostic_result.ping_results.size());
@@ -1042,7 +1031,6 @@ public:
             variables["summary_successful_tcp"] = std::to_string(successful_tcp);
             variables["summary_total_tcp"] = std::to_string(diagnostic_result.tcp_results.size());
 
-            //网络接口表格行
             std::string network_interfaces_rows;
             for (const auto& iface : diagnostic_result.network_interfaces) {
                 SimpleTemplateProcessor::Variables row_vars;
@@ -1066,7 +1054,6 @@ public:
             }
             variables["network_interfaces_rows"] = network_interfaces_rows;
 
-            //代理配置内容
             std::string proxy_config_content;
             if (diagnostic_result.proxy_config.proxy_enabled) {
                 proxy_config_content += u8"<p><strong>🔧 代理状态:</strong> <span class=\"success\">已启用</span></p>\n";

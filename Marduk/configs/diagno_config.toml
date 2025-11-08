@@ -51,7 +51,7 @@ host = "github.com"
 port = 443
 
 
-# UDP 连接诊断目标
+# UDP 连接诊断目标.0
 
 [[udp_test_targets]]
 host = "dns.google"
