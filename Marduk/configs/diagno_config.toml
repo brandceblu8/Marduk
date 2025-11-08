@@ -1,0 +1,58 @@
+# ==================================
+# Marduk diagno指令测试对象配置文件
+# ==================================
+#
+# 此文件用于配置 'diagno' 命令的诊断目标
+#
+
+# Ping 诊断目标
+# 在这里添加你想测试 ICMP 连通性的 IP 地址或域名
+ping_targets = [
+    "8.8.8.8",         # Google DNS
+    "223.5.5.5",       # AliDNS
+    "10.255.44.33",    # 校园网验证网关
+    "baidu.com",
+    "alibaba.com",          
+    "w.xidian.edu.cn", 
+    "github.com"       
+]
+
+# DNS 诊断目标
+# 在这里添加你想测试 DNS 解析的域名
+dns_test_domains = [
+    "baidu.com",
+    "w.xidian.edu.cn",
+    "bing.com",   
+    "github.com",
+    "google.com"
+]
+
+# TCP 连接诊断目标
+# 每个目标包含 'host' (主机) 和 'port' (端口)
+
+[[tcp_test_targets]]
+host = "baidu.com"
+port = 80
+
+[[tcp_test_targets]]
+host = "baidu.com"
+port = 443
+
+[[tcp_test_targets]]
+host = "w.xidian.edu.cn"
+port = 80
+
+[[tcp_test_targets]]
+host = "w.xidian.edu.cn"
+port = 443
+
+[[tcp_test_targets]]
+host = "github.com"
+port = 443
+
+
+# UDP 连接诊断目标
+
+[[udp_test_targets]]
+host = "dns.google"
+port = 53

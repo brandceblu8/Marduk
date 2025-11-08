@@ -13,6 +13,7 @@
 #include <iomanip>
 #include <chrono>
 #include <WinInet.h>
+#include <toml++/toml.h>
 
 #pragma comment(lib, "Wininet.lib")
 #pragma comment(lib, "NetworkDiagnosticDll.lib")
@@ -54,11 +55,8 @@ std::string wstring_to_utf8(const std::wstring& wstr) {
     return strTo;
 }
 
-
-// --- 函数声明 ---
 bool IsRunningAsAdmin();
 bool requestElevation();
-bool hasAdminPrivilegesForOperation();
 void printHelp();
 void handleLogin();
 void handleZfwInfo();
@@ -74,7 +72,7 @@ void handleProxyReset();
 std::wstring get_executable_dir();
 void initializeManagers();
 
-// 错误码转换函数
+
 std::wstring dnsErrorCodeToWString(DnsErrorCode code) {
     switch (code) {
     case DnsErrorCode::SUCCESS: return L"SUCCESS";
@@ -122,7 +120,7 @@ std::wstring diagnosticErrorCodeToWString(DiagnosticErrorCode code) {
     }
 }
 
-// 请求管理员权限
+
 bool requestElevation() {
     std::wcout << L"\n⚠️  此操作需要管理员权限！" << std::endl;
     std::wcout << L"是否要以管理员身份重新启动程序? (y/n): ";
@@ -131,11 +129,9 @@ bool requestElevation() {
     std::getline(std::wcin, choice);
 
     if (choice == L"y" || choice == L"Y" || choice == L"是") {
-        // 获取当前程序路径
         wchar_t szPath[MAX_PATH];
         GetModuleFileName(NULL, szPath, MAX_PATH);
 
-        // 以管理员权限重新启动
         SHELLEXECUTEINFO sei = { 0 };
         sei.cbSize = sizeof(sei);
         sei.lpVerb = L"runas";
@@ -147,7 +143,6 @@ bool requestElevation() {
             std::wcout << L"正在以管理员权限重新启动..." << std::endl;
 
             if (sei.hProcess) {
-                WaitForSingleObject(sei.hProcess, 3000);
                 CloseHandle(sei.hProcess);
             }
 
@@ -169,30 +164,9 @@ bool requestElevation() {
     return false;
 }
 
-// 检查当前是否有管理员权限（用于特定操作）
-bool hasAdminPrivilegesForOperation() {
-    BOOL isAdmin = FALSE;
-    SID_IDENTIFIER_AUTHORITY ntAuthority = SECURITY_NT_AUTHORITY;
-    PSID administratorsGroup = NULL;
 
-    if (AllocateAndInitializeSid(&ntAuthority, 2,
-        SECURITY_BUILTIN_DOMAIN_RID,
-        DOMAIN_ALIAS_RID_ADMINS,
-        0, 0, 0, 0, 0, 0,
-        &administratorsGroup)) {
-        if (!CheckTokenMembership(NULL, administratorsGroup, &isAdmin)) {
-            isAdmin = FALSE;
-        }
-        FreeSid(administratorsGroup);
-    }
-
-    return isAdmin == TRUE;
-}
-
-
-// 使用 wmain 作为宽字符入口点
 int wmain(int argc, wchar_t* argv[]) {
-    // 1. 设置控制台为 UTF-16 模式，完美支持 wcout
+    // 设置控制台为 UTF-16 模式，完美支持 wcout
     int result = _setmode(_fileno(stdout), _O_U16TEXT);
     if (result == -1) {
         std::wcout << L"警告: 无法设置控制台为UTF-16模式\n";
@@ -201,7 +175,6 @@ int wmain(int argc, wchar_t* argv[]) {
     std::wcout << L"--- 西电校园网辅助工具 (CLI v1.0) ---" << std::endl;
     std::wcout << L"欢迎使用！输入 'help' 查看所有可用命令。" << std::endl;
 
-    // 显示当前权限状态
     if (IsRunningAsAdmin()) {
         std::wcout << L"🔐 当前运行模式: 管理员权限" << std::endl;
     }
@@ -210,7 +183,7 @@ int wmain(int argc, wchar_t* argv[]) {
         std::wcout << L"💡 提示: 某些功能需要管理员权限时会自动提示" << std::endl;
     }
 
-    initializeManagers(); // 初始化全局管理器
+    initializeManagers();
 
     std::wstring command;
     while (true) {
@@ -352,7 +325,6 @@ void handleDnsDeploy() {
 
     std::wcout << L"--- DNS 服务部署 ---\n";
 
-    // 初始化DNS管理器
     DnsResult init_result = g_dnsManager->initialize();
     if (!init_result.isSuccess()) {
         std::wcout << L"DNS Manager 初始化失败: "
@@ -360,7 +332,6 @@ void handleDnsDeploy() {
         return;
     }
 
-    // 获取服务状态
     DnsServiceInfo info = g_dnsManager->getServiceInfo();
     std::wcout << L"当前服务状态:\n";
     std::wcout << L"  已安装: " << (info.is_installed ? L"是" : L"否") << L"\n";
@@ -368,7 +339,6 @@ void handleDnsDeploy() {
     std::wcout << L"  规则数量: " << info.rule_count << L"\n";
     std::wcout << L"  服务路径: " << utf8_to_wstring(info.service_path) << L"\n";
 
-    // 安装服务（如果需要）
     if (!info.is_installed) {
         std::wcout << L"\n正在安装 DNS 服务...\n";
         DnsResult install_result = g_dnsManager->installService();
@@ -383,8 +353,7 @@ void handleDnsDeploy() {
         std::wcout << L"✓ 服务已安装。\n";
     }
 
-    // 启动服务（如果需要）
-    info = g_dnsManager->getServiceInfo(); // 更新状态
+    info = g_dnsManager->getServiceInfo();
     if (!info.is_running) {
         std::wcout << L"正在启动 DNS 服务...\n";
         DnsResult start_result = g_dnsManager->startService();
@@ -430,8 +399,6 @@ void handleDnsAdd() {
     DnsResult result = g_dnsManager->addRule(ip, hostname);
     if (result.isSuccess()) {
         std::wcout << L"✓ 规则添加成功: " << utf8_to_wstring(result.error_message) << std::endl;
-
-        // 询问是否重启DNS服务以应用更改
         std::wcout << L"是否重启DNS服务以应用更改？(y/N): ";
         std::wstring response;
         std::getline(std::wcin, response);
@@ -707,6 +674,75 @@ void displayDiagnosticSummary(const DiagnosticResult& result) {
     }
 }
 
+// 辅助函数：从 config.toml 加载诊断配置
+// 如果加载失败，返回 false 并使用硬编码的默认值
+bool loadDiagnosticConfig(DiagnosticConfig& config, std::wstring& error_message) {
+    try {
+        std::filesystem::path exe_dir = get_executable_dir();
+        std::filesystem::path config_path = exe_dir / L"config" / L"diagno_config.toml";
+
+        if (!std::filesystem::exists(config_path)) {
+            error_message = L"配置文件 'config/diagno_config.toml' 未找到。";
+            return false;
+        }
+
+        toml::table tbl = toml::parse_file(config_path.string());
+
+        if (auto ping_arr = tbl["ping_targets"].as_array()) {
+            for (auto&& el : *ping_arr) {
+                if (auto str = el.as_string()) {
+                    config.ping_targets.push_back(std::string(str->get()));
+                }
+            }
+        }
+
+        if (auto dns_arr = tbl["dns_test_domains"].as_array()) {
+            for (auto&& el : *dns_arr) {
+                if (auto str = el.as_string()) {
+                    config.dns_test_domains.push_back(std::string(str->get()));
+                }
+            }
+        }
+
+        if (auto tcp_arr = tbl["tcp_test_targets"].as_array()) {
+            for (auto&& el : *tcp_arr) {
+                if (auto target_tbl = el.as_table()) {
+                    std::string host;
+                    int port = 0;
+
+                    if (auto h = (*target_tbl)["host"].as_string()) {
+                        host = h->get();
+                    }
+                    if (auto p = (*target_tbl)["port"].as_integer()) {
+                        port = static_cast<int>(p->get());
+                    }
+
+                    if (!host.empty() && port != 0) {
+                        config.tcp_test_targets.push_back({ host, port });
+                    }
+                }
+            }
+        }
+
+        // 4. 加载 UDP 目标 (备用)
+        // ... 逻辑同上 ...
+
+        error_message = L"成功从 'config/config.toml' 加载 " +
+            std::to_wstring(config.ping_targets.size()) + L" 个Ping目标, " +
+            std::to_wstring(config.dns_test_domains.size()) + L" 个DNS目标, " +
+            std::to_wstring(config.tcp_test_targets.size()) + L" 个TCP目标。";
+        return true;
+    }
+    catch (const toml::parse_error& e) {
+        error_message = L"解析 'config/config.toml' 失败: \n" + utf8_to_wstring(e.what());
+        return false;
+    }
+    catch (const std::exception& e) {
+        error_message = L"加载配置文件时发生 C++ 异常: " + utf8_to_wstring(e.what());
+        return false;
+    }
+}
+
 void handleDiagnose() {
     if (!g_networkDiagnostic) {
         std::wcout << L"网络诊断模块未初始化。" << std::endl;
@@ -717,22 +753,31 @@ void handleDiagnose() {
     std::wcout << L"正在执行全面网络诊断，这可能需要几分钟时间..." << std::endl;
     std::wcout << L"请稍候..." << std::endl;
 
-    std::wcout << L"\n[1/4] 正在收集系统信息..." << std::endl;
+    
 
     DiagnosticConfig config;
-    config.ping_targets = {
-        "8.8.8.8", "10.255.44.33", "223.5.5.5",
-        "baidu.com", "w.xidian.edu.cn", "github.com"
-    };
-    config.dns_test_domains = {
-        "baidu.com", "w.xidian.edu.cn", "github.com", "google.com"
-    };
-    config.tcp_test_targets = {
-        {"baidu.com", 80}, {"baidu.com", 443},
-        {"w.xidian.edu.cn", 80}, {"w.xidian.edu.cn", 443},
-        {"github.com", 80}, {"github.com", 443}
-    };
+    std::wstring config_load_msg;
 
+    if (loadDiagnosticConfig(config, config_load_msg)) {
+        std::wcout << L"✓ " << config_load_msg << std::endl;
+    }
+    else {
+        config.ping_targets = {
+            "8.8.8.8", "10.255.44.33", "223.5.5.5",
+            "baidu.com", "w.xidian.edu.cn", "github.com"
+        };
+        config.dns_test_domains = {
+            "baidu.com", "w.xidian.edu.cn", "github.com", "google.com"
+        };
+        config.tcp_test_targets = {
+            {"baidu.com", 80}, {"baidu.com", 443},
+            {"w.xidian.edu.cn", 80}, {"w.xidian.edu.cn", 443},
+            {"github.com", 80}, {"github.com", 443}
+        };
+    }
+
+    // 之后考虑把这些塞进Diagnostic的类里面
+    std::wcout << L"\n[1/4] 正在收集系统信息..." << std::endl;
     std::wcout << L"[2/4] 正在执行网络连通性测试..." << std::endl;
     std::wcout << L"[3/4] 正在执行DNS解析测试..." << std::endl;
     std::wcout << L"[4/4] 正在执行TCP连接测试..." << std::endl;
@@ -814,7 +859,6 @@ void handleDiagnose() {
         std::wcout << L"将报告保存到桌面: " << output_path_fs.wstring() << std::endl;
     }
 
-    // 生成时间戳
     auto now = std::chrono::system_clock::now();
     auto time_t = std::chrono::system_clock::to_time_t(now);
     std::tm tm_buf;
@@ -823,9 +867,8 @@ void handleDiagnose() {
     wchar_t time_buffer[32];
     wcsftime(time_buffer, sizeof(time_buffer) / sizeof(wchar_t), L"%Y%m%d_%H%M%S", &tm_buf);
 
-    // 创建基础文件名（选择一种）
-    std::wstring base_name = L"NetworkDiagnostic_" + std::wstring(time_buffer); // 英文版本
-    // std::wstring base_name = L"网络诊断报告_" + std::wstring(time_buffer);   // 中文版本
+    std::wstring base_name = L"NetworkDiagnostic_" + std::wstring(time_buffer);
+    // std::wstring base_name = L"网络诊断报告_" + std::wstring(time_buffer);
 
     bool success = false;
     std::vector<std::filesystem::path> generated_files;
@@ -835,7 +878,7 @@ void handleDiagnose() {
         std::wcout << L"\n正在生成文本报告..." << std::endl;
 
         auto txt_path = output_path_fs / (base_name + L".txt");
-        std::string utf8_txt_path = txt_path.string();  // 自动处理编码
+        std::string utf8_txt_path = txt_path.string();
 
         DiagnosticResult txt_result = g_networkDiagnostic->generateReport(result, utf8_txt_path);
         if (txt_result.isSuccess()) {
@@ -854,7 +897,7 @@ void handleDiagnose() {
         std::wcout << L"\n正在生成HTML报告..." << std::endl;
 
         auto html_path = output_path_fs / (base_name + L".html");
-        std::string utf8_html_path = html_path.string();  // 自动处理编码
+        std::string utf8_html_path = html_path.string();
 
         DiagnosticResult html_result = g_networkDiagnostic->generateHTMLReport(result, utf8_html_path);
         if (html_result.isSuccess()) {
@@ -862,7 +905,6 @@ void handleDiagnose() {
             generated_files.push_back(html_path);
             success = true;
 
-            // 询问是否打开HTML报告
             std::wcout << L"\n是否立即打开HTML报告查看? (y/n): ";
             std::wstring open_choice;
             std::getline(std::wcin, open_choice);
@@ -877,7 +919,6 @@ void handleDiagnose() {
         }
     }
 
-    // 最终结果
     if (success) {
         std::wcout << L"\n🎉 网络诊断报告生成完成!" << std::endl;
         std::wcout << L"共生成 " << generated_files.size() << L" 个报告文件。" << std::endl;
@@ -906,13 +947,7 @@ void handleProxyReset() {
     list.pszConnection = NULL;
     list.dwOptionCount = 1;
     list.dwOptionError = 0;
-
     list.pOptions = new INTERNET_PER_CONN_OPTION[list.dwOptionCount];
-    if (!list.pOptions) {
-        std::wcout << L"❌ 内存分配失败。" << std::endl; // NCC认为不太可能，之后可以删了
-        return;
-    }
-
     list.pOptions[0].dwOption = INTERNET_PER_CONN_FLAGS;
     list.pOptions[0].Value.dwValue = PROXY_TYPE_DIRECT;
 

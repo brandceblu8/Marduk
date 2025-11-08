@@ -13,6 +13,9 @@
       <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
       <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
     </Filter>
+    <Filter Include="config">
+      <UniqueIdentifier>{75de68d8-de91-4c9c-b5cf-9c51e9ab771f}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Marduk.cpp">
@@ -21,5 +24,8 @@
   </ItemGroup>
   <ItemGroup>
     <CopyFileToFolders Include="crnn_model.onnx" />
+    <CopyFileToFolders Include="configs\diagno_config.toml">
+      <Filter>config</Filter>
+    </CopyFileToFolders>
   </ItemGroup>
 </Project>

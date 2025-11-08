@@ -228,7 +228,7 @@ public:
             session_options.AppendExecutionProvider_CUDA(cuda_options);
         }
         catch (...) {
-            std::wcerr << "CUDA provider is not available. Falling back to CPU." << std::endl;
+            std::wcerr << "CUDA provider for auto captcha is not available. Falling back to CPU." << std::endl;
         }
         session_options.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_ALL);
         try {
