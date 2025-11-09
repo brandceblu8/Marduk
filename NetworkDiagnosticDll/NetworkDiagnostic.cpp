@@ -45,33 +45,6 @@ private:
     IcmpSendEchoFunc pIcmpSendEcho;
     bool initialization_success;
 
-public:
-    //ICMPHelper() : hIcmpDll(nullptr), pIcmpCreateFile(nullptr),
-    //    pIcmpCloseHandle(nullptr), pIcmpSendEcho(nullptr),
-    //    initialization_success(false) {
-    //    try {
-    //        // 尝试加载ICMP.DLL
-    //        hIcmpDll = LoadLibraryA("ICMP.DLL");
-    //        if (hIcmpDll) {
-    //            pIcmpCreateFile = (IcmpCreateFileFunc)GetProcAddress(hIcmpDll, "IcmpCreateFile");
-    //            pIcmpCloseHandle = (IcmpCloseHandleFunc)GetProcAddress(hIcmpDll, "IcmpCloseHandle");
-    //            pIcmpSendEcho = (IcmpSendEchoFunc)GetProcAddress(hIcmpDll, "IcmpSendEcho");
-
-    //            // 检查所有函数是否成功加载
-    //            if (pIcmpCreateFile && pIcmpCloseHandle && pIcmpSendEcho) {
-    //                initialization_success = true;
-    //            }
-    //        }
-    //    }
-    //    catch (...) {
-    //        cleanup();
-    //    }
-    //}
-
-    //~ICMPHelper() {
-    //    cleanup();
-    //}
-
 private:
     void cleanup() {
         if (hIcmpDll) {
@@ -120,7 +93,6 @@ public:
 
 class NetworkDiagnostic::NetworkDiagnosticImpl {
 private:
-    //std::unique_ptr<ICMPHelper> icmpHelper;
     std::unique_ptr<ThreadPool> thread_pool;
     std::map<int, std::string> pppoe_error_suggestions = {
         {678, u8"🔴 PPPoE错误678：远程计算机没有响应 - 检查网线连接、联系运营商或重启光猫"},
@@ -132,18 +104,18 @@ private:
         {815, u8"🔴 PPPoE错误815：宽带网络连接配置可能不正确 - 重新配置网络连接"}
     };
 
+    std::string WideToUTF8(const std::wstring& wstr) {
+        if (wstr.empty()) return std::string();
+        int size_needed = WideCharToMultiByte(CP_UTF8, 0, &wstr[0], (int)wstr.size(), NULL, 0, NULL, NULL);
+        std::string strTo(size_needed, 0);
+        WideCharToMultiByte(CP_UTF8, 0, &wstr[0], (int)wstr.size(), &strTo[0], size_needed, NULL, NULL);
+        return strTo;
+    }
+
 public:
     NetworkDiagnosticImpl() {
         WSADATA wsaData;
         WSAStartup(MAKEWORD(2, 2), &wsaData);
-
-        //try {
-        //    icmpHelper = std::make_unique<ICMPHelper>();
-        //}
-        //catch (...) {
-        //    icmpHelper = nullptr;
-        //}
-
         size_t thread_count = std::max<size_t>(4u, std::thread::hardware_concurrency() * 2);
         thread_pool = std::make_unique<ThreadPool>(thread_count);
     }
@@ -396,13 +368,6 @@ public:
 
             RegCloseKey(hKey);
         }
-        else {
-            // 降级方案：使用GetVersion()
-            DWORD version = 0;
-            DWORD majorVersion = (DWORD)(LOBYTE(LOWORD(version)));
-            DWORD minorVersion = (DWORD)(HIBYTE(LOWORD(version)));
-            oss << "Windows Version: " << majorVersion << "." << minorVersion << "\n";
-        }
 
         // 获取内存信息
         MEMORYSTATUSEX memInfo;
@@ -415,7 +380,7 @@ public:
         return oss.str();
     }
 
-    // 添加现代的IP地址转换辅助函数
+    // IP地址转换辅助函数
     std::string ipv4ToString(DWORD ipAddress) {
         char buffer[INET_ADDRSTRLEN];
         struct in_addr addr;
@@ -532,8 +497,8 @@ public:
         }
 
         if (proxyConfig.lpszProxy) {
-            std::wstring wstr(proxyConfig.lpszProxy);
-            std::string proxy_str(wstr.begin(), wstr.end());
+            //std::wstring wstr(proxyConfig.lpszProxy);
+            std::string proxy_str = WideToUTF8(proxyConfig.lpszProxy);
 
             // 解析代理服务器和端口
             size_t colon_pos = proxy_str.find(':');
@@ -545,11 +510,10 @@ public:
         }
 
         if (proxyConfig.lpszProxyBypass) {
-            std::wstring wstr(proxyConfig.lpszProxyBypass);
-            config.proxy_bypass = std::string(wstr.begin(), wstr.end());
+            //std::wstring wstr(proxyConfig.lpszProxyBypass);
+            config.proxy_bypass = WideToUTF8(proxyConfig.lpszProxyBypass);
         }
 
-        // 清理内存
         if (proxyConfig.lpszAutoConfigUrl) GlobalFree(proxyConfig.lpszAutoConfigUrl);
         if (proxyConfig.lpszProxy) GlobalFree(proxyConfig.lpszProxy);
         if (proxyConfig.lpszProxyBypass) GlobalFree(proxyConfig.lpszProxyBypass);
@@ -603,11 +567,6 @@ public:
     DiagnosticResult icmpApiPing(const std::string& target, PingResult& result) {
         result.target = target;
         result.success = false;
-
-        /*if (!icmpHelper->IsAvailable()) {
-            return DiagnosticResult(DiagnosticErrorCode::NETWORK_PING_FAILED,
-                "ICMP API not available");
-        }*/
 
         HANDLE hIcmpFile = IcmpCreateFile();
         if (hIcmpFile == INVALID_HANDLE_VALUE) {
@@ -683,7 +642,6 @@ public:
         }
 
         free(ReplyBuffer);
-        /*icmpHelper->CloseHandle(hIcmpFile);*/
         IcmpCloseHandle(hIcmpFile);
 
         return DiagnosticResult(DiagnosticErrorCode::SUCCESS, "ICMP API ping completed");
