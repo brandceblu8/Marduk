@@ -675,9 +675,12 @@ void displayDiagnosticSummary(const DiagnosticResult& result) {
 }
 
 // 辅助函数：从 config.toml 加载诊断配置
-// 如果加载失败，返回 false 并使用硬编码的默认值
-// TODO: 真神了，NCC发现config居然还老是不为空，而且NCC笃定这个原因就在这个函数里面，但是还没找到问题。
+// 找到问题了，宏里面定义了它们，所以先清空之后再赋值比较好
 bool loadDiagnosticConfig(DiagnosticConfig& config, std::wstring& error_message) {
+    config.ping_targets.clear();
+    config.dns_test_domains.clear();
+    config.tcp_test_targets.clear();
+
     try {
         std::filesystem::path exe_dir = get_executable_dir();
         std::filesystem::path config_path = exe_dir / L"config" / L"diagno_config.toml";
@@ -759,20 +762,6 @@ void handleDiagnose() {
 
     if (loadDiagnosticConfig(config, config_load_msg)) {
         std::wcout << L"✓ " << config_load_msg << std::endl;
-    }
-    else {
-        config.ping_targets = {
-            "8.8.8.8", "10.255.44.33", "223.5.5.5",
-            "baidu.com", "w.xidian.edu.cn", "github.com"
-        };
-        config.dns_test_domains = {
-            "baidu.com", "w.xidian.edu.cn", "github.com", "google.com"
-        };
-        config.tcp_test_targets = {
-            {"baidu.com", 80}, {"baidu.com", 443},
-            {"w.xidian.edu.cn", 80}, {"w.xidian.edu.cn", 443},
-            {"github.com", 80}, {"github.com", 443}
-        };
     }
 
     // 之后考虑把这些塞进Diagnostic的类里面
