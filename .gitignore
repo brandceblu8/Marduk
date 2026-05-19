@@ -2,6 +2,7 @@
 *.log
 pac.txt
 
+.vscode/
 bin/
 [Bb]uild/
 *.obj
