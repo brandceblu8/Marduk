@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include <vector>
 #include <queue>
@@ -34,7 +34,7 @@ private:
     std::atomic<size_t> active_count;
 };
 
-// ʵ��
+// 实现
 inline ThreadPool::ThreadPool(size_t threads) : stop(false), active_count(0) {
     for (size_t i = 0; i < threads; ++i) {
         workers.emplace_back([this] {

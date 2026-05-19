@@ -37,19 +37,6 @@ jobs:
         vcpkgGitCommitId: 'b1e15efef6758eaa0beb0a8732cfa66f6a68a81d'
         vcpkgJsonGlob: 'vcpkg.json'
     
-    - name: Install dependencies via vcpkg
-      run: |
-        echo "正在安装 vcpkg 依赖包..."
-        .\vcpkg\vcpkg.exe install cpr:x64-windows
-        .\vcpkg\vcpkg.exe install gumbo-parser:x64-windows
-        .\vcpkg\vcpkg.exe install nlohmann-json:x64-windows
-        .\vcpkg\vcpkg.exe install opencv4[core,imgproc,imgcodecs]:x64-windows
-        .\vcpkg\vcpkg.exe install onnxruntime:x64-windows
-        .\vcpkg\vcpkg.exe install cryptopp:x64-windows
-        
-        .\vcpkg\vcpkg.exe list
-      shell: cmd
-    
     - name: Download ONNX model
       run: |
         if (!(Test-Path "Marduk\crnn_model.onnx")) {

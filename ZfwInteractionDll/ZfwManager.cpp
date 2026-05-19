@@ -8,7 +8,7 @@
 #include <cpr/cpr.h>
 #include <gumbo.h>
 #include <nlohmann/json.hpp>
-#include <onnxruntime_cxx_api.h>
+#include <onnxruntime/onnxruntime_cxx_api.h>
 #include <opencv2/opencv.hpp>
 
 #include <cryptopp/rsa.h>

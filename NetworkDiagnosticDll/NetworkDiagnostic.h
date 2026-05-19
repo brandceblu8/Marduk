@@ -1,4 +1,4 @@
-#pragma once
+ï»¿#pragma once
 
 #ifdef NETWORKDIAGNOSTICDLL_EXPORTS
 #define NETWORKDIAGNOSTIC_API __declspec(dllexport)
@@ -17,36 +17,36 @@
 #include <vector>
 #include <memory>
 
-// ÍøÂçÕï¶Ï´íÎóÂë
+// ç½‘ç»œè¯Šæ–­é”™è¯¯ç 
 enum class NETWORKDIAGNOSTIC_API DiagnosticErrorCode : int {
     SUCCESS = 0,
 
-    // ÎÄ¼ş´íÎó (3000-3099)
+    // æ–‡ä»¶é”™è¯¯ (3000-3099)
     FILE_CREATE_FAILED = 3001,
     FILE_WRITE_FAILED = 3002,
     FILE_PATH_INVALID = 3003,
 
-    // ÏµÍ³´íÎó (3100-3199)
+    // ç³»ç»Ÿé”™è¯¯ (3100-3199)
     SYSTEM_WMI_ACCESS_FAILED = 3101,
     SYSTEM_REGISTRY_ACCESS_FAILED = 3102,
     SYSTEM_NETWORK_INFO_FAILED = 3103,
     SYSTEM_PERMISSION_DENIED = 3104,
 
-    // ÍøÂç²âÊÔ´íÎó (3200-3299)
+    // ç½‘ç»œæµ‹è¯•é”™è¯¯ (3200-3299)
     NETWORK_PING_FAILED = 3201,
     NETWORK_DNS_QUERY_FAILED = 3202,
     NETWORK_CONNECTION_FAILED = 3203,
     NETWORK_TIMEOUT = 3204,
 
-    // ÅäÖÃ´íÎó (3300-3399)
+    // é…ç½®é”™è¯¯ (3300-3399)
     CONFIG_INVALID_TARGET = 3301,
     CONFIG_INVALID_PATH = 3302,
 
-    // ÆäËû´íÎó
+    // å…¶ä»–é”™è¯¯
     SYSTEM_UNKNOWN_ERROR = 3999
 };
 
-// ÍøÂç½Ó¿ÚĞÅÏ¢
+// ç½‘ç»œæ¥å£ä¿¡æ¯
 struct NETWORKDIAGNOSTIC_API NetworkInterface {
     std::string name;
     std::string description;
@@ -61,7 +61,7 @@ struct NETWORKDIAGNOSTIC_API NetworkInterface {
     uint64_t bytes_received;
 };
 
-// ´úÀíÅäÖÃĞÅÏ¢
+// ä»£ç†é…ç½®ä¿¡æ¯
 struct NETWORKDIAGNOSTIC_API ProxyConfig {
     bool proxy_enabled;
     std::string proxy_server;
@@ -71,7 +71,7 @@ struct NETWORKDIAGNOSTIC_API ProxyConfig {
     std::string auto_config_url;
 };
 
-// Â·ÓÉĞÅÏ¢
+// è·¯ç”±ä¿¡æ¯
 struct NETWORKDIAGNOSTIC_API RouteInfo {
     std::string destination;
     std::string netmask;
@@ -80,7 +80,7 @@ struct NETWORKDIAGNOSTIC_API RouteInfo {
     int metric;
 };
 
-// Ping²âÊÔ½á¹û
+// Pingæµ‹è¯•ç»“æœ
 struct NETWORKDIAGNOSTIC_API PingResult {
     std::string target;
     bool success;
@@ -91,7 +91,7 @@ struct NETWORKDIAGNOSTIC_API PingResult {
     std::string error_message;
 };
 
-// DNS²éÑ¯½á¹û
+// DNSæŸ¥è¯¢ç»“æœ
 struct NETWORKDIAGNOSTIC_API DnsQueryResult {
     std::string hostname;
     std::vector<std::string> ip_addresses;
@@ -101,7 +101,7 @@ struct NETWORKDIAGNOSTIC_API DnsQueryResult {
     std::string error_message;
 };
 
-// TCPÁ¬½Ó²âÊÔ½á¹û
+// TCPè¿æ¥æµ‹è¯•ç»“æœ
 struct NETWORKDIAGNOSTIC_API TcpConnectionResult {
     std::string target_host;
     int target_port;
@@ -110,7 +110,7 @@ struct NETWORKDIAGNOSTIC_API TcpConnectionResult {
     std::string error_message;
 };
 
-// Õï¶ÏÅäÖÃ
+// è¯Šæ–­é…ç½®
 struct NETWORKDIAGNOSTIC_API DiagnosticConfig {
     std::vector<std::string> ping_targets = {
         "8.8.8.8", "114.114.114.114", "223.5.5.5",
@@ -129,21 +129,21 @@ struct NETWORKDIAGNOSTIC_API DiagnosticConfig {
     int dns_timeout_ms = 3000;
 };
 
-// Õï¶Ï½á¹û
+// è¯Šæ–­ç»“æœ
 struct NETWORKDIAGNOSTIC_API DiagnosticResult {
     DiagnosticErrorCode error_code;
     std::string error_message;
 
-    // ÏµÍ³ĞÅÏ¢
+    // ç³»ç»Ÿä¿¡æ¯
     std::string system_info;
     std::string timestamp;
 
-    // ÍøÂçÅäÖÃ
+    // ç½‘ç»œé…ç½®
     std::vector<NetworkInterface> network_interfaces;
     ProxyConfig proxy_config;
     std::vector<RouteInfo> routing_table;
 
-    // ²âÊÔ½á¹û
+    // æµ‹è¯•ç»“æœ
     std::vector<PingResult> ping_results;
     std::vector<DnsQueryResult> dns_results;
     std::vector<TcpConnectionResult> tcp_results;
@@ -158,26 +158,26 @@ struct NETWORKDIAGNOSTIC_API DiagnosticResult {
     bool isSuccess() const { return error_code == DiagnosticErrorCode::SUCCESS; }
 };
 
-// ÍøÂçÕï¶Ï¹ÜÀíÆ÷
+// ç½‘ç»œè¯Šæ–­ç®¡ç†å™¨
 class NETWORKDIAGNOSTIC_API NetworkDiagnostic {
 public:
     NetworkDiagnostic();
     ~NetworkDiagnostic();
 
-    // Ö´ĞĞÍêÕûÕï¶Ï
+    // æ‰§è¡Œå®Œæ•´è¯Šæ–­
     DiagnosticResult runFullDiagnostic(const DiagnosticConfig& config = DiagnosticConfig{});
 
-    // µ¥¶ÀµÄÕï¶Ï¹¦ÄÜ
+    // å•ç‹¬çš„è¯Šæ–­åŠŸèƒ½
     DiagnosticResult getNetworkInterfaces(std::vector<NetworkInterface>& interfaces);
     DiagnosticResult getProxyConfig(ProxyConfig& config);
     DiagnosticResult getRoutingTable(std::vector<RouteInfo>& routes);
 
-    // ÍøÂç²âÊÔ¹¦ÄÜ
+    // ç½‘ç»œæµ‹è¯•åŠŸèƒ½
     DiagnosticResult pingTest(const std::vector<std::string>& targets, std::vector<PingResult>& results);
     DiagnosticResult dnsTest(const std::vector<std::string>& domains, std::vector<DnsQueryResult>& results);
     DiagnosticResult tcpTest(const std::vector<std::pair<std::string, int>>& targets, std::vector<TcpConnectionResult>& results);
 
-    // ±¨¸æÉú³É
+    // æŠ¥å‘Šç”Ÿæˆ
     DiagnosticResult generateReport(const DiagnosticResult& result, const std::string& output_path);
     DiagnosticResult generateHTMLReport(const DiagnosticResult& result, const std::string& output_path);
 

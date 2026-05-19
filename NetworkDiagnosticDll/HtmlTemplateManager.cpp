@@ -1,4 +1,4 @@
-#include "pch.h"
+ï»¿#include "pch.h"
 #include "HtmlTemplateManager.h"
 #include <regex>
 #include <fstream>
@@ -102,14 +102,14 @@ private:
             result.replace(match.position(), match.length(), replacement);
         }
 
-        // ´¦Àí {{#unless variable}}...{{/unless}}
+        // å¤„ç† {{#unless variable}}...{{/unless}}
         std::regex unless_regex(R"(\{\{#unless\s+([^}]+)\}\}(.*?)\{\{/unless\}\})");
         while (std::regex_search(result, match, unless_regex)) {
             std::string condition = match[1].str();
             std::string unless_content = match[2].str();
             std::string replacement = "";
 
-            // ¼ì²é·´ÏòÌõ¼ş
+            // æ£€æŸ¥åå‘æ¡ä»¶
             auto var_it = variables.find(condition);
             if (var_it == variables.end() || var_it->second.empty() || var_it->second == "0" || var_it->second == "false") {
                 replacement = unless_content;
@@ -124,7 +124,7 @@ private:
     std::string processFunctions(const std::string& content, const TemplateVariables& variables) {
         std::string result = content;
 
-        // ´¦Àíº¯Êıµ÷ÓÃ {{function_name(param)}}
+        // å¤„ç†å‡½æ•°è°ƒç”¨ {{function_name(param)}}
         std::regex func_regex(R"(\{\{([a-zA-Z_][a-zA-Z0-9_]*)\(([^)]*)\)\}\})");
         std::smatch match;
 
@@ -147,7 +147,7 @@ private:
     }
 };
 
-// HtmlTemplateManager ÊµÏÖ
+// HtmlTemplateManager å®ç°
 HtmlTemplateManager::HtmlTemplateManager() : impl(std::make_unique<HtmlTemplateManagerImpl>()) {}
 HtmlTemplateManager::~HtmlTemplateManager() = default;
 

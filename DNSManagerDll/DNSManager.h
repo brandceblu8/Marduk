@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #ifdef DNSMANAGERDLL_EXPORTS
 #define DNS_API __declspec(dllexport)
@@ -19,11 +19,11 @@
 enum class DnsErrorCode : int {
     SUCCESS = 0,
 
-    // Ȩ�޴��� (2000-2099)
+    // 权限错误 (2000-2099)
     PERMISSION_DENIED = 2001,
     PERMISSION_ADMIN_REQUIRED = 2002,
 
-    // ������� (2100-2199)
+    // 服务错误 (2100-2199)
     SERVICE_NOT_FOUND = 2101,
     SERVICE_INSTALL_FAILED = 2102,
     SERVICE_UNINSTALL_FAILED = 2103,
@@ -32,18 +32,18 @@ enum class DnsErrorCode : int {
     SERVICE_ALREADY_RUNNING = 2106,
     SERVICE_ALREADY_STOPPED = 2107,
 
-    // �ļ����� (2200-2299)
+    // 文件错误 (2200-2299)
     FILE_NOT_FOUND = 2201,
     FILE_ACCESS_DENIED = 2202,
     FILE_WRITE_FAILED = 2203,
     FILE_READ_FAILED = 2204,
 
-    // ���ô��� (2300-2399)
+    // 配置错误 (2300-2399)
     CONFIG_INVALID_IP = 2301,
     CONFIG_INVALID_HOSTNAME = 2302,
     CONFIG_RULE_EXISTS = 2303,
 
-    // ϵͳ���� (2900-2999)
+    // 系统错误 (2900-2999)
     SYSTEM_SCM_ACCESS_FAILED = 2901,
     SYSTEM_SERVICE_HANDLE_FAILED = 2902,
     SYSTEM_UNKNOWN_ERROR = 2999
@@ -60,7 +60,7 @@ struct DnsResult {
     bool isSuccess() const { return error_code == DnsErrorCode::SUCCESS; }
 };
 
-// DNS����״̬��Ϣ
+// DNS服务状态信息
 struct DnsServiceInfo {
     bool is_installed = false;
     bool is_running = false;

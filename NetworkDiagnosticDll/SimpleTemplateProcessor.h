@@ -1,4 +1,4 @@
-#pragma once
+ï»¿#pragma once
 
 #include <string>
 #include <map>
@@ -11,7 +11,7 @@ public:
     static std::string render(const std::string& template_content, const Variables& variables) {
         std::string result = template_content;
 
-        // Ìæ»»ËùÓĞ {{variable_name}} Õ¼Î»·û
+        // æ›¿æ¢æ‰€æœ‰ {{variable_name}} å ä½ç¬¦
         std::regex var_regex(R"(\{\{([^}]+)\}\})");
         std::smatch match;
 
@@ -30,11 +30,11 @@ public:
         return result;
     }
 
-    // ×ªÒåHTMLÌØÊâ×Ö·û
+    // è½¬ä¹‰HTMLç‰¹æ®Šå­—ç¬¦
     static std::string escapeHtml(const std::string& input) {
         std::string result = input;
 
-        // Ìæ»»HTMLÌØÊâ×Ö·û
+        // æ›¿æ¢HTMLç‰¹æ®Šå­—ç¬¦
         std::map<std::string, std::string> replacements = {
             {"&", "&amp;"},
             {"<", "&lt;"},

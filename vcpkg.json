@@ -1,0 +1,16 @@
+{
+  "$schema": "https://raw.githubusercontent.com/microsoft/vcpkg-tool/main/docs/vcpkg.schema.json",
+  "name": "marduk",
+  "version": "1.0.0",
+  "description": "Xidian campus network diagnostic tool",
+  "builtin-baseline": "67566432ae0e666388f0e1ba108ef68ef5dce589",
+  "dependencies": [
+    "cpr",
+    "gumbo",
+    "nlohmann-json",
+    "tomlplusplus",
+    "cryptopp",
+    "onnxruntime",
+    "opencv4"
+  ]
+}
