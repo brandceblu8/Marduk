@@ -1,4 +1,4 @@
-﻿name: Build Release
+name: Build Release
 
 on:
   push:
@@ -38,34 +38,34 @@ jobs:
     - name: Download ONNX model
       run: |
         if (!(Test-Path "Marduk\crnn_model.onnx")) {
-          Write-Host "警告: ONNX 模型文件未找到，请确保已包含在仓库中"
+          Write-Host "ONNX Model Not Found"
         } else {
-          Write-Host "ONNX 模型文件检查通过"
+          Write-Host "ONNX Model Check Failed"
         }
       shell: powershell
 
     - name: Build project
       run: |
-        echo "开始编译项目..."
+        echo "Building project..."
         msbuild Marduk.sln ^
           /p:Configuration=Release ^
           /p:Platform=x64 ^
           /verbosity:minimal ^
           /maxcpucount
-        echo "编译完成！"
+        echo "Build finished."
       shell: cmd
 
     - name: Verify build outputs
       run: |
         $OutputDir = "bin\x64\Release"
 
-        Write-Host "检查编译输出..."
+        Write-Host "Checking build outputs..."
         if (Test-Path $OutputDir) {
           Get-ChildItem $OutputDir -Recurse | ForEach-Object {
             Write-Host "  - $($_.Name) ($($_.Length) bytes)"
           }
         } else {
-          Write-Error "编译输出目录不存在: $OutputDir"
+          Write-Error "Build output directory not found: $OutputDir"
           exit 1
         }
 
@@ -78,12 +78,12 @@ jobs:
 
         foreach ($file in $RequiredFiles) {
           if (!(Test-Path $file)) {
-            Write-Error "缺少关键文件: $file"
+            Write-Error "Missing required file: $file"
             exit 1
           }
         }
 
-        Write-Host "所有关键文件检查通过！"
+        Write-Host "All required files present."
       shell: powershell
 
     - name: Collect runtime dependencies
@@ -91,19 +91,19 @@ jobs:
         $OutputDir = "bin\x64\Release"
         $VcpkgBinDir = "vcpkg_installed\x64-windows\bin"
 
-        Write-Host "收集运行时依赖库..."
+        Write-Host "Collecting runtime dependencies..."
 
         if (Test-Path $VcpkgBinDir) {
           $DllFiles = Get-ChildItem "$VcpkgBinDir\*.dll"
           foreach ($dll in $DllFiles) {
             Copy-Item $dll.FullName -Destination $OutputDir -Force
-            Write-Host "  - 复制: $($dll.Name)"
+            Write-Host "  - copied: $($dll.Name)"
           }
         } else {
-          Write-Host "警告: 未找到 vcpkg 运行时目录 $VcpkgBinDir"
+          Write-Host "WARNING: vcpkg runtime directory not found: $VcpkgBinDir"
         }
 
-        Write-Host "依赖收集完成！"
+        Write-Host "Dependency collection finished."
       shell: powershell
 
     - name: Create release package
@@ -113,7 +113,7 @@ jobs:
         $SourceDir = "bin\x64\Release"
         $PackageDir = $PackageName
 
-        Write-Host "创建发布包: $PackageName"
+        Write-Host "Creating release package: $PackageName"
 
         New-Item -ItemType Directory -Path $PackageDir -Force
 
@@ -123,23 +123,23 @@ jobs:
         Copy-Item "LICENCE.txt" -Destination "$PackageDir\LICENCE.txt" -ErrorAction SilentlyContinue
 
         @"
-        Marduk - 西电校园网络诊断工具
-        版本: $Version
-        编译时间: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')
-        编译环境: GitHub Actions (windows-2025-vs2026)
-        架构: x64
+        Marduk - Network Diagonize Toolkit
+        Version: $Version
+        Compile Time: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')
+        Compile Env: GitHub Actions (windows-2025-vs2026)
+        Arch: x64
 
-        使用说明:
-        1. 以管理员权限运行 Marduk.exe
-        2. 输入 'help' 查看所有可用命令
-        3. 建议首次使用执行: login -> diagno -> pasopt
+        Usage:
+        1. run Marduk.exe with Administrator
+        2. Type 'help' to show all supported commands
+        3. Recommand routes: login -> diagno -> pasopt
 
-        技术支持: NCC (网络安全协会)
+        Tech Support: NanCunChild
         "@ | Out-File -FilePath "$PackageDir\VERSION.txt" -Encoding UTF8
 
         Compress-Archive -Path $PackageDir -DestinationPath "$PackageName.zip" -Force
 
-        Write-Host "发布包创建完成: $PackageName.zip"
+        Write-Host "Create GitHub Release: $PackageName.zip"
 
         "PACKAGE_NAME=$PackageName" | Out-File -FilePath $env:GITHUB_ENV -Append
         "PACKAGE_FILE=$PackageName.zip" | Out-File -FilePath $env:GITHUB_ENV -Append
@@ -157,45 +157,44 @@ jobs:
       with:
         name: "Marduk ${{ github.ref_name }}"
         body: |
-          # Marduk ${{ github.ref_name }} - 西电校园网络诊断工具
+          # Marduk ${{ github.ref_name }} - Network Diagonizer in Xidian
 
-          ## 新版本发布
+          ## New Version Released
 
-          **发布时间**: ${{ steps.date.outputs.date }}
-          **编译环境**: GitHub Actions (Windows + MSVC)
-          **架构支持**: Windows x64
+          **Release Time**: ${{ steps.date.outputs.date }}
+          **Compile Env**: GitHub Actions (Windows + MSVC)
+          **Arch**: Windows x64
 
-          ## 下载说明
+          ## Download
 
-          - **完整版**: `Marduk-${{ github.ref_name }}-Windows-x64.zip` (推荐)
-            - 包含所有运行时依赖
-            - 解压即用，无需额外安装
+          - **Full Version**: `Marduk-${{ github.ref_name }}-Windows-x64.zip` 
+            - All dependencies included
 
-          ## 快速开始
+          ## Quick Start
 
-          1. 下载并解压 `Marduk-${{ github.ref_name }}-Windows-x64.zip`
-          2. 以管理员身份运行 `Marduk.exe`
-          3. 输入 `help` 查看所有可用命令
-          4. 建议新用户执行：`login` -> `diagno` -> `pasopt`
+          1. Download and unzip `Marduk-${{ github.ref_name }}-Windows-x64.zip`
+          2. Run `Marduk.exe` with Administrator
+          3. Type `help` to show all supported commands
+          4. Recommand routes：`login` -> `diagno` -> `pasopt`
 
-          ## 系统要求
+          ## System Requirements
 
           - Windows 10/11 (x64)
           - Microsoft Visual C++ Redistributable
-          - 管理员权限（用于 DNS 服务管理）
 
-          ## 技术信息
+          ## Tech Info
 
-          - **C++ 标准**: C++17
-          - **包管理**: vcpkg (manifest 模式)
-          - **依赖库**: OpenCV, ONNX Runtime, CPR, Crypto++
+          - **C++ **: C++17
+          - **Package Manage**: vcpkg (manifest mode)
+          - **Dependencies**: OpenCV, ONNX Runtime, CPR, Crypto++
 
           ---
 
-          **由 NCC 开发维护**
+          **Developed by NCC**
         files: ${{ env.PACKAGE_FILE }}
         draft: false
         prerelease: false
         generate_release_notes: true
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
