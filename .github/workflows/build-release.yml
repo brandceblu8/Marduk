@@ -1,4 +1,4 @@
-name: Build Release
+﻿name: Build Release
 
 on:
   push:
@@ -11,32 +11,29 @@ env:
 
 jobs:
   build:
-    runs-on: windows-2022
-    
+    runs-on: windows-2025-vs2026
+
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
       with:
         submodules: recursive
-        fetch-depth: 0
-    
+
     - name: Setup MSBuild
       uses: microsoft/setup-msbuild@v2
-    
+
     - name: Setup vcpkg cache
       uses: actions/github-script@v7
       with:
         script: |
           core.exportVariable('ACTIONS_CACHE_URL', process.env.ACTIONS_CACHE_URL || '');
           core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN || '');
-    
-    - name: Setup vcpkg
-      uses: lukka/run-vcpkg@v11
-      with:
-        vcpkgDirectory: '${{ github.workspace }}/vcpkg'
-        vcpkgGitCommitId: 'b1e15efef6758eaa0beb0a8732cfa66f6a68a81d'
-        vcpkgJsonGlob: 'vcpkg.json'
-    
+
+    - name: Get current date
+      id: date
+      run: echo "date=$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" >> $env:GITHUB_OUTPUT
+      shell: powershell
+
     - name: Download ONNX model
       run: |
         if (!(Test-Path "Marduk\crnn_model.onnx")) {
@@ -45,182 +42,159 @@ jobs:
           Write-Host "ONNX 模型文件检查通过"
         }
       shell: powershell
-    
+
     - name: Build project
       run: |
         echo "开始编译项目..."
-        
-        # 设置 vcpkg 工具链路径
-        set VCPKG_ROOT=${{ github.workspace }}\vcpkg
-        set CMAKE_TOOLCHAIN_FILE=%VCPKG_ROOT%\scripts\buildsystems\vcpkg.cmake
-        
-        # 使用 MSBuild 编译解决方案
         msbuild Marduk.sln ^
           /p:Configuration=Release ^
           /p:Platform=x64 ^
-          /p:UseVcpkg=true ^
-          /p:VcpkgTriplet=x64-windows ^
-          /p:VcpkgRoot=${{ github.workspace }}\vcpkg\installed ^
           /verbosity:minimal ^
           /maxcpucount
-        
         echo "编译完成！"
       shell: cmd
-    
+
     - name: Verify build outputs
       run: |
         $OutputDir = "bin\x64\Release"
-        
+
         Write-Host "检查编译输出..."
         if (Test-Path $OutputDir) {
           Get-ChildItem $OutputDir -Recurse | ForEach-Object {
-            Write-Host "  ✓ $($_.Name) ($($_.Length) bytes)"
+            Write-Host "  - $($_.Name) ($($_.Length) bytes)"
           }
         } else {
           Write-Error "编译输出目录不存在: $OutputDir"
           exit 1
         }
-        
-        # 检查关键文件
+
         $RequiredFiles = @(
           "$OutputDir\Marduk.exe",
-          "$OutputDir\ZfwInteractionDll.dll", 
+          "$OutputDir\ZfwInteractionDll.dll",
           "$OutputDir\DNSManagerDll.dll",
           "$OutputDir\NetworkDiagnosticDll.dll"
         )
-        
+
         foreach ($file in $RequiredFiles) {
           if (!(Test-Path $file)) {
             Write-Error "缺少关键文件: $file"
             exit 1
           }
         }
-        
+
         Write-Host "所有关键文件检查通过！"
       shell: powershell
-    
+
     - name: Collect runtime dependencies
       run: |
         $OutputDir = "bin\x64\Release"
-        $VcpkgBinDir = "vcpkg\installed\x64-windows\bin"
-        
+        $VcpkgBinDir = "vcpkg_installed\x64-windows\bin"
+
         Write-Host "收集运行时依赖库..."
-        
-        # 复制 vcpkg 安装的 DLL
+
         if (Test-Path $VcpkgBinDir) {
           $DllFiles = Get-ChildItem "$VcpkgBinDir\*.dll"
           foreach ($dll in $DllFiles) {
             Copy-Item $dll.FullName -Destination $OutputDir -Force
-            Write-Host "  ✓ 复制: $($dll.Name)"
+            Write-Host "  - 复制: $($dll.Name)"
           }
+        } else {
+          Write-Host "警告: 未找到 vcpkg 运行时目录 $VcpkgBinDir"
         }
-        
+
         Write-Host "依赖收集完成！"
       shell: powershell
-    
+
     - name: Create release package
       run: |
         $Version = "${{ github.ref_name }}"
         $PackageName = "Marduk-$Version-Windows-x64"
         $SourceDir = "bin\x64\Release"
         $PackageDir = $PackageName
-        
+
         Write-Host "创建发布包: $PackageName"
-        
-        # 创建发布目录
+
         New-Item -ItemType Directory -Path $PackageDir -Force
-        
-        # 复制程序文件
+
         Copy-Item "$SourceDir\*" -Destination $PackageDir -Recurse -Force
-        
-        # 复制文档文件
+
         Copy-Item "README.md" -Destination "$PackageDir\README.md" -ErrorAction SilentlyContinue
-        Copy-Item "LICENSE" -Destination "$PackageDir\LICENSE.txt" -ErrorAction SilentlyContinue
-        
-        # 创建版本信息文件
+        Copy-Item "LICENCE.txt" -Destination "$PackageDir\LICENCE.txt" -ErrorAction SilentlyContinue
+
         @"
-          Marduk - 西电校园网络诊断工具
-          版本: $Version
-          编译时间: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')
-          编译环境: GitHub Actions (Windows 2022)
-          架构: x64
+        Marduk - 西电校园网络诊断工具
+        版本: $Version
+        编译时间: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')
+        编译环境: GitHub Actions (windows-2025-vs2026)
+        架构: x64
 
-          使用说明:
-          1. 以管理员权限运行 Marduk.exe
-          2. 输入 'help' 查看所有可用命令
-          3. 建议首次使用执行: login -> diagno -> pasopt
+        使用说明:
+        1. 以管理员权限运行 Marduk.exe
+        2. 输入 'help' 查看所有可用命令
+        3. 建议首次使用执行: login -> diagno -> pasopt
 
-          技术支持: NCC (网络安全协会)
-          "@ | Out-File -FilePath "$PackageDir\VERSION.txt" -Encoding UTF8
-        
-        # 创建 ZIP 压缩包
+        技术支持: NCC (网络安全协会)
+        "@ | Out-File -FilePath "$PackageDir\VERSION.txt" -Encoding UTF8
+
         Compress-Archive -Path $PackageDir -DestinationPath "$PackageName.zip" -Force
-        
+
         Write-Host "发布包创建完成: $PackageName.zip"
-        
-        # 输出到环境变量，供后续步骤使用
+
         "PACKAGE_NAME=$PackageName" | Out-File -FilePath $env:GITHUB_ENV -Append
         "PACKAGE_FILE=$PackageName.zip" | Out-File -FilePath $env:GITHUB_ENV -Append
       shell: powershell
-    
+
     - name: Upload build artifacts
       uses: actions/upload-artifact@v4
       with:
         name: ${{ env.PACKAGE_NAME }}
         path: ${{ env.PACKAGE_FILE }}
         retention-days: 90
-    
+
     - name: Create GitHub Release
-      uses: softprops/action-gh-release@v1
+      uses: softprops/action-gh-release@v2
       with:
         name: "Marduk ${{ github.ref_name }}"
         body: |
           # Marduk ${{ github.ref_name }} - 西电校园网络诊断工具
-          
-          ## 🎉 新版本发布
-          
+
+          ## 新版本发布
+
           **发布时间**: ${{ steps.date.outputs.date }}
-          **编译环境**: GitHub Actions (Windows 2022 + MSVC)
+          **编译环境**: GitHub Actions (Windows + MSVC)
           **架构支持**: Windows x64
-          
-          ## 📦 下载说明
-          
+
+          ## 下载说明
+
           - **完整版**: `Marduk-${{ github.ref_name }}-Windows-x64.zip` (推荐)
             - 包含所有运行时依赖
             - 解压即用，无需额外安装
-          
-          ## 🚀 快速开始
-          
+
+          ## 快速开始
+
           1. 下载并解压 `Marduk-${{ github.ref_name }}-Windows-x64.zip`
           2. 以管理员身份运行 `Marduk.exe`
           3. 输入 `help` 查看所有可用命令
-          4. 建议新用户执行：`login` → `diagno` → `pasopt`
-          
-          ## ⚠️ 系统要求
-          
+          4. 建议新用户执行：`login` -> `diagno` -> `pasopt`
+
+          ## 系统要求
+
           - Windows 10/11 (x64)
-          - Microsoft Visual C++ 2019/2022 Redistributable
-          - 管理员权限（用于DNS服务管理）
-          
-          ## 🔧 技术信息
-          
-          - **C++ 标准**: C++17/20
-          - **编译器**: MSVC v143
-          - **包管理**: vcpkg
+          - Microsoft Visual C++ Redistributable
+          - 管理员权限（用于 DNS 服务管理）
+
+          ## 技术信息
+
+          - **C++ 标准**: C++17
+          - **包管理**: vcpkg (manifest 模式)
           - **依赖库**: OpenCV, ONNX Runtime, CPR, Crypto++
-          
+
           ---
-          
+
           **由 NCC 开发维护**
-          
         files: ${{ env.PACKAGE_FILE }}
         draft: false
         prerelease: false
         generate_release_notes: true
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-    
-    - name: Get current date
-      id: date
-      run: echo "date=$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" >> $env:GITHUB_OUTPUT
-      shell: powershell
