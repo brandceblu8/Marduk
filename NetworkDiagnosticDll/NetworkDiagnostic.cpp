@@ -605,7 +605,7 @@ public:
 
         if (!ReplyBuffer) {
             /*icmpHelper->CloseHandle(hIcmpFile);*/
-			IcmpCloseHandle(hIcmpFile);
+            IcmpCloseHandle(hIcmpFile);
             return DiagnosticResult(DiagnosticErrorCode::SYSTEM_NETWORK_INFO_FAILED,
                 "Memory allocation failed");
         }
@@ -659,7 +659,7 @@ public:
 
             // 如果有严重错误，记录但继续处理其他目标
             if (!ping_result.isSuccess() && ping_result.error_code != DiagnosticErrorCode::NETWORK_PING_FAILED) {
-                
+
             }
         }
 
@@ -1148,26 +1148,60 @@ public:
             variables["routing_table_section"] = routing_table_section;
 
             //诊断建议
+            //
+            // Bug 2 修复说明：
+            // 旧逻辑用 "successful < total / 2" 判断是否异常。由于这是整数除法
+            // 且不含等号，例如 7 个 ping 目标 (7/2==3) 要成功数 < 3 才报警，
+            // 意味着失败 4 个仍判定"无问题"。这导致报告几乎永远显示"网络状态良好"。
+            // 现改为：只要有任意一项失败就列出建议，并按 全部失败 / 部分失败 分级。
             std::string diagnostic_suggestions;
             std::vector<std::string> suggestions;
             bool has_network_issues = false;
 
-            // 检查连通性问题
-            if (successful_pings < static_cast<int>(diagnostic_result.ping_results.size()) / 2) {
+            const int total_pings = static_cast<int>(diagnostic_result.ping_results.size());
+            const int total_dns = static_cast<int>(diagnostic_result.dns_results.size());
+            const int total_tcp = static_cast<int>(diagnostic_result.tcp_results.size());
+
+            // 检查连通性问题：只要有失败项就提示
+            if (total_pings > 0 && successful_pings < total_pings) {
                 has_network_issues = true;
-                suggestions.push_back(u8"🔴 网络连接异常：建议检查网络连接状态、防火墙设置或联系网络管理员");
+                if (successful_pings == 0) {
+                    suggestions.push_back(u8"🔴 网络连接异常：所有 Ping 目标均不可达，"
+                        u8"建议检查网络连接状态、防火墙设置或联系网络管理员");
+                }
+                else {
+                    suggestions.push_back(u8"🟠 部分连通性异常：" + std::to_string(total_pings - successful_pings)
+                        + u8"/" + std::to_string(total_pings)
+                        + u8" 个 Ping 目标不可达，建议关注具体失败目标（见上方明细）");
+                }
             }
 
-            // 检查DNS问题
-            if (successful_dns < static_cast<int>(diagnostic_result.dns_results.size()) / 2) {
+            // 检查DNS问题：只要有失败项就提示
+            if (total_dns > 0 && successful_dns < total_dns) {
                 has_network_issues = true;
-                suggestions.push_back(u8"🟡 DNS解析异常：建议更换DNS服务器(如8.8.8.8)或检查DNS配置");
+                if (successful_dns == 0) {
+                    suggestions.push_back(u8"🔴 DNS解析异常：所有域名均解析失败，"
+                        u8"建议更换 DNS 服务器（如 223.5.5.5）或检查 DNS 配置");
+                }
+                else {
+                    suggestions.push_back(u8"🟡 部分DNS解析异常：" + std::to_string(total_dns - successful_dns)
+                        + u8"/" + std::to_string(total_dns)
+                        + u8" 个域名解析失败，建议更换 DNS 服务器（如 223.5.5.5）或检查 DNS 配置");
+                }
             }
 
-            // 检查TCP连接问题
-            if (successful_tcp < static_cast<int>(diagnostic_result.tcp_results.size()) / 2) {
+            // 检查TCP连接问题：只要有失败项就提示
+            if (total_tcp > 0 && successful_tcp < total_tcp) {
                 has_network_issues = true;
-                suggestions.push_back(u8"🟠 TCP连接异常：建议检查目标服务器状态或端口可用性");
+                if (successful_tcp == 0) {
+                    suggestions.push_back(u8"🔴 TCP连接异常：所有 TCP 目标均无法连接，"
+                        u8"建议检查目标服务器状态或端口可用性");
+                }
+                else {
+                    suggestions.push_back(u8"🟠 部分TCP连接异常：" + std::to_string(total_tcp - successful_tcp)
+                        + u8"/" + std::to_string(total_tcp)
+                        + u8" 个 TCP 目标连接失败，建议检查目标服务器状态或端口可用性");
+                }
             }
 
             // 检查活跃接口
@@ -1178,7 +1212,7 @@ public:
 
 
             if (!has_network_issues) {
-                diagnostic_suggestions = u8"<p style=\"color: #27ae60;\">🎉 网络状态良好！所有测试项目基本正常。</p>";
+                diagnostic_suggestions = u8"<p style=\"color: #27ae60;\">🎉 网络状态良好！所有测试项目均通过。</p>";
             }
             else {
                 diagnostic_suggestions = u8"<ul>";
