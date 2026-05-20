@@ -1,13 +1,11 @@
 cmake_minimum_required(VERSION 3.21)
-project(MardukGui VERSION 1.0.0 LANGUAGES CXX)
+project(MardukGui VERSION 2.0.0 LANGUAGES CXX)
 
-set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
 
-# ─── vcpkg / Qt6 ───────────────────────────────────────────────
+# ─── Qt6 ──────────────────────────────────────────────────────
 find_package(Qt6 REQUIRED COMPONENTS Core Widgets Concurrent)
 
 # ─── Sources ───────────────────────────────────────────────────
@@ -34,31 +32,31 @@ qt_add_executable(MardukGui WIN32 ${SOURCES})
 
 target_include_directories(MardukGui PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}
-    ${CMAKE_CURRENT_SOURCE_DIR}/../ZfwInteractionDll
-    ${CMAKE_CURRENT_SOURCE_DIR}/../DNSManagerDll
-    ${CMAKE_CURRENT_SOURCE_DIR}/../NetworkDiagnosticDll
-    ${CMAKE_CURRENT_SOURCE_DIR}/../WifiPortalDll
 )
 
-# ─── Link against existing DLLs ───────────────────────────────
-# In Release builds these .lib files come from the solution's output directory.
-# Adjust the path to match your build layout.
-set(MARDUK_LIB_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../x64/Release" CACHE PATH "Path to DLL import libraries")
-
+# ─── Link against project DLL targets + Qt6 ───────────────────
 target_link_libraries(MardukGui PRIVATE
     Qt6::Core
     Qt6::Widgets
     Qt6::Concurrent
-    # Existing DLL import libraries
-    ${MARDUK_LIB_DIR}/ZfwInteractionDll.lib
-    ${MARDUK_LIB_DIR}/DNSManagerDll.lib
-    ${MARDUK_LIB_DIR}/NetworkDiagnosticDll.lib
-    ${MARDUK_LIB_DIR}/WifiPortalDll.lib
+    ZfwInteractionDll
+    DNSManagerDll
+    NetworkDiagnosticDll
+    WifiPortalDll
+    shell32
+    ole32
 )
 
-# ─── Windows-specific: manifest for DPI-awareness ─────────────
+# ─── Compiler Options ─────────────────────────────────────────
+target_compile_options(MardukGui PRIVATE /utf-8 /W3 /permissive-)
+target_compile_definitions(MardukGui PRIVATE
+    WIN32_LEAN_AND_MEAN
+    UNICODE
+    _UNICODE
+)
+
+# ─── Windows-specific: DPI-awareness ─────────────────────────
 if(WIN32)
-    target_link_libraries(MardukGui PRIVATE shell32 ole32)
     set_target_properties(MardukGui PROPERTIES
         WIN32_EXECUTABLE TRUE
         VS_DPI_AWARE "PerMonitor"

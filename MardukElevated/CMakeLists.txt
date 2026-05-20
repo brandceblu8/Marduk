@@ -1,28 +1,26 @@
 cmake_minimum_required(VERSION 3.21)
-project(MardukElevated VERSION 1.0.0 LANGUAGES CXX)
-
-set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
+project(MardukElevated VERSION 2.0.0 LANGUAGES CXX)
 
 # ─── Sources ───────────────────────────────────────────────────
 add_executable(MardukElevated main.cpp)
 
-target_include_directories(MardukElevated PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/../DNSManagerDll
-)
-
-# ─── Link existing DLL ────────────────────────────────────────
-set(MARDUK_LIB_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../x64/Release" CACHE PATH "Path to DLL import libraries")
-
+# ─── Link against DNS manager DLL target ──────────────────────
 target_link_libraries(MardukElevated PRIVATE
-    ${MARDUK_LIB_DIR}/DNSManagerDll.lib
+    DNSManagerDll
     shell32
 )
 
+# ─── Compiler Options ─────────────────────────────────────────
+target_compile_options(MardukElevated PRIVATE /utf-8 /W3 /permissive-)
+target_compile_definitions(MardukElevated PRIVATE
+    WIN32_LEAN_AND_MEAN
+    UNICODE
+    _UNICODE
+)
+
 # ─── Require admin via manifest ────────────────────────────────
-# 这个 exe 必须以管理员身份运行（嵌入 manifest）
 if(MSVC)
-    set_target_properties(MardukElevated PROPERTIES
-        LINK_FLAGS "/MANIFESTUAC:\"level='requireAdministrator' uiAccess='false'\""
+    target_link_options(MardukElevated PRIVATE
+        "/MANIFESTUAC:level='requireAdministrator' uiAccess='false'"
     )
 endif()

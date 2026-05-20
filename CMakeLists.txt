@@ -1,23 +1,43 @@
 cmake_minimum_required(VERSION 3.21)
 project(Marduk VERSION 2.0.0 LANGUAGES CXX)
 
-# ─── 全局设置 ──────────────────────────────────────────────────
+# ══════════════════════════════════════════════════════════════════
+# 全局设置
+# ══════════════════════════════════════════════════════════════════
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
 
-# vcpkg 工具链（如果从命令行 cmake -DCMAKE_TOOLCHAIN_FILE=... 传入则优先用那个）
-if(NOT DEFINED CMAKE_TOOLCHAIN_FILE)
-    set(CMAKE_TOOLCHAIN_FILE "${CMAKE_CURRENT_SOURCE_DIR}/vcpkg/scripts/buildsystems/vcpkg.cmake"
-        CACHE STRING "Vcpkg toolchain file")
-endif()
+# 统一输出目录 — 所有 exe/dll 都放在同一目录方便运行
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 
-# ─── 子项目 ───────────────────────────────────────────────────
-# GUI 主程序
-add_subdirectory(MardukGui)
+# ══════════════════════════════════════════════════════════════════
+# DLL 子项目（先构建，因为 exe 依赖它们）
+# ══════════════════════════════════════════════════════════════════
+add_subdirectory(ZfwInteractionDll)
+add_subdirectory(DNSManagerDll)
+add_subdirectory(NetworkDiagnosticDll)
+add_subdirectory(WifiPortalDll)
+
+# ══════════════════════════════════════════════════════════════════
+# EXE 子项目
+# ══════════════════════════════════════════════════════════════════
+# CLI 主程序
+add_subdirectory(Marduk)
+
+# 测试程序
+add_subdirectory(TestApp)
 
 # 提权代理子进程
 add_subdirectory(MardukElevated)
 
-# 注意：现有的 DLL 项目 (ZfwInteractionDll, DNSManagerDll, etc.)
-# 仍通过 Visual Studio .sln 构建。
-# 如果你后续想全部迁移到 CMake，可以在这里 add_subdirectory 它们。
+# Qt6 GUI 主程序（可选：如果未安装 Qt6 则跳过）
+find_package(Qt6 QUIET COMPONENTS Core)
+if(Qt6_FOUND)
+    add_subdirectory(MardukGui)
+    message(STATUS "Qt6 found — MardukGui will be built")
+else()
+    message(STATUS "Qt6 not found — MardukGui will be skipped (install qtbase via vcpkg)")
+endif()

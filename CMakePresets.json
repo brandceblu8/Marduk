@@ -9,27 +9,43 @@
     {
       "name": "default",
       "displayName": "x64 Release (vcpkg)",
-      "description": "Build with vcpkg and custom triplet",
+      "description": "Release build with vcpkg toolchain and custom triplet",
+      "generator": "Ninja",
       "binaryDir": "${sourceDir}/build",
       "cacheVariables": {
         "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/vcpkg/scripts/buildsystems/vcpkg.cmake",
         "VCPKG_TARGET_TRIPLET": "custom-x64-windows",
         "VCPKG_OVERLAY_TRIPLETS": "${sourceDir}/custom-triplets",
-        "CMAKE_BUILD_TYPE": "Release",
-        "MARDUK_LIB_DIR": "${sourceDir}/x64/Release"
+        "CMAKE_BUILD_TYPE": "Release"
       }
     },
     {
       "name": "debug",
       "displayName": "x64 Debug (vcpkg)",
-      "description": "Debug build with vcpkg",
+      "description": "Debug build with vcpkg toolchain",
+      "generator": "Ninja",
       "binaryDir": "${sourceDir}/build-debug",
       "cacheVariables": {
         "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/vcpkg/scripts/buildsystems/vcpkg.cmake",
         "VCPKG_TARGET_TRIPLET": "custom-x64-windows",
         "VCPKG_OVERLAY_TRIPLETS": "${sourceDir}/custom-triplets",
-        "CMAKE_BUILD_TYPE": "Debug",
-        "MARDUK_LIB_DIR": "${sourceDir}/x64/Debug"
+        "CMAKE_BUILD_TYPE": "Debug"
+      }
+    },
+    {
+      "name": "msvc",
+      "displayName": "x64 MSVC (Visual Studio 17)",
+      "description": "For opening in Visual Studio with vcpkg",
+      "generator": "Visual Studio 17 2022",
+      "architecture": {
+        "value": "x64",
+        "strategy": "set"
+      },
+      "binaryDir": "${sourceDir}/build-msvc",
+      "cacheVariables": {
+        "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/vcpkg/scripts/buildsystems/vcpkg.cmake",
+        "VCPKG_TARGET_TRIPLET": "custom-x64-windows",
+        "VCPKG_OVERLAY_TRIPLETS": "${sourceDir}/custom-triplets"
       }
     }
   ],
@@ -42,6 +58,16 @@
     {
       "name": "debug",
       "configurePreset": "debug",
+      "configuration": "Debug"
+    },
+    {
+      "name": "msvc-release",
+      "configurePreset": "msvc",
+      "configuration": "Release"
+    },
+    {
+      "name": "msvc-debug",
+      "configurePreset": "msvc",
       "configuration": "Debug"
     }
   ]
