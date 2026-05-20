@@ -1,7 +1,6 @@
 {
-  "$schema": "https://raw.githubusercontent.com/microsoft/vcpkg-tool/main/docs/vcpkg.schema.json",
   "name": "marduk",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "Xidian campus network diagnostic tool",
   "builtin-baseline": "67566432ae0e666388f0e1ba108ef68ef5dce589",
   "dependencies": [
@@ -11,6 +10,12 @@
     "tomlplusplus",
     "cryptopp",
     "onnxruntime",
-    "opencv4"
+    "opencv4",
+    {
+      "name": "qtbase",
+      "default-features": true,
+      "features": []
+    },
+    "qttools"
   ]
 }
