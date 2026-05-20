@@ -9,27 +9,22 @@
     {
       "name": "default",
       "displayName": "x64 Release (vcpkg)",
-      "description": "Build with vcpkg and custom triplet",
+      "description": "Build with vcpkg manifest mode + custom-x64-windows triplet",
       "binaryDir": "${sourceDir}/build",
       "cacheVariables": {
         "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/vcpkg/scripts/buildsystems/vcpkg.cmake",
         "VCPKG_TARGET_TRIPLET": "custom-x64-windows",
         "VCPKG_OVERLAY_TRIPLETS": "${sourceDir}/custom-triplets",
-        "CMAKE_BUILD_TYPE": "Release",
-        "MARDUK_LIB_DIR": "${sourceDir}/x64/Release"
+        "CMAKE_BUILD_TYPE": "Release"
       }
     },
     {
       "name": "debug",
+      "inherits": "default",
       "displayName": "x64 Debug (vcpkg)",
-      "description": "Debug build with vcpkg",
       "binaryDir": "${sourceDir}/build-debug",
       "cacheVariables": {
-        "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/vcpkg/scripts/buildsystems/vcpkg.cmake",
-        "VCPKG_TARGET_TRIPLET": "custom-x64-windows",
-        "VCPKG_OVERLAY_TRIPLETS": "${sourceDir}/custom-triplets",
-        "CMAKE_BUILD_TYPE": "Debug",
-        "MARDUK_LIB_DIR": "${sourceDir}/x64/Debug"
+        "CMAKE_BUILD_TYPE": "Debug"
       }
     }
   ],
