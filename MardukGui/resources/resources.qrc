@@ -1,0 +1,7 @@
+<RCC>
+    <qresource prefix="/">
+        <!-- 在此添加图标、样式表等资源文件 -->
+        <!-- <file>icons/app_icon.png</file> -->
+        <!-- <file>styles/dark.qss</file> -->
+    </qresource>
+</RCC>
