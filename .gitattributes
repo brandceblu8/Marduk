@@ -1,2 +1,19 @@
-*.yml text eol=lf
-*.yaml text eol=lf
+# 文本文件交给 git 自动处理
+* text=auto
+
+# Windows 专属工程文件 —— 强制 CRLF
+*.vcxproj   text eol=crlf
+*.vcxproj.filters text eol=crlf
+*.props     text eol=crlf
+*.targets   text eol=crlf
+*.sln       text eol=crlf
+*.bat       text eol=crlf
+*.cmd       text eol=crlf
+
+# 跨平台 / Linux 侧文件 —— 强制 LF
+*.yml       text eol=lf
+*.yaml      text eol=lf
+*.sh        text eol=lf
+
+# vcpkg submodule 不参与父仓库的行尾规则
+vcpkg/ -text

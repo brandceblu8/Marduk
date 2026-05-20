@@ -2,13 +2,13 @@
 *.log
 pac.txt
 
+.vscode/
 bin/
 [Bb]uild/
 *.obj
 *.user
 .vs/
 [A-Za-z]*.????????/
-*.d071f9de/
 
 ZfwInteractionDll/x64/
 DNSManagerDll/x64/
@@ -16,6 +16,16 @@ TestApp/x64/
 Marduk/x64/
 NetworkDiagnosticDll/x64/
 WifiPortalDll/x64/
+
+ZfwInteractionDll/Debug/
+DNSManagerDll/Debug/
+TestApp/Debug/
+Marduk/Debug/
+NetworkDiagnosticDll/Debug/
+WifiPortalDll/Debug/
+
+Debug/
+
 report/
 
 vcpkg_installed/

@@ -4,6 +4,7 @@
     <VcpkgEnabled>true</VcpkgEnabled>
     <VcpkgEnableManifest>true</VcpkgEnableManifest>
     <VcpkgManifestInstall>true</VcpkgManifestInstall>
+    <VcpkgOverlayTriplets>$(MSBuildThisFileDirectory)custom-triplets</VcpkgOverlayTriplets>
     <VcpkgTriplet Condition="'$(Platform)'=='x64'">x64-windows</VcpkgTriplet>
     <VcpkgHostTriplet Condition="'$(Platform)'=='x64'">x64-windows</VcpkgHostTriplet>
     <VcpkgConfiguration Condition="'$(Configuration)'=='Debug'">Debug</VcpkgConfiguration>
