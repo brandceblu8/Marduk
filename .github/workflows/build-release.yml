@@ -12,6 +12,8 @@ env:
 jobs:
   build:
     runs-on: windows-2025-vs2026
+    permissions:
+      contents: write
 
     steps:
     - name: Checkout repository

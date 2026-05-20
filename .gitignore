@@ -3,6 +3,7 @@
 pac.txt
 
 .vscode/
+.vs/
 bin/
 [Bb]uild/
 *.obj
@@ -29,3 +30,5 @@ Debug/
 report/
 
 vcpkg_installed/
+
+target/
