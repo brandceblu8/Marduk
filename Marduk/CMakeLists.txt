@@ -18,11 +18,15 @@ target_link_libraries(Marduk PRIVATE
     shell32
 )
 
-# wmain + Console 子系统：CMake 默认 add_executable 即 Console；
-# MSVC 链接器在没有 main 而有 wmain 时自动选择 wmainCRTStartup。
+# wmain + Console 子系统。MSVC 在 _UNICODE 下自动选 wmainCRTStartup；
+# MinGW 必须显式 -municode。
 set_target_properties(Marduk PROPERTIES
     WIN32_EXECUTABLE FALSE   # Console
 )
+if(NOT MSVC)
+    target_compile_options(Marduk PRIVATE -municode)
+    target_link_options(Marduk    PRIVATE -municode)
+endif()
 
 # 部署文件：crnn_model.onnx 紧贴 exe；diagno_config.toml 进 exe/config/
 add_custom_command(TARGET Marduk POST_BUILD

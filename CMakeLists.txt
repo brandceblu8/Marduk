@@ -19,7 +19,7 @@ if(NOT DEFINED VCPKG_OVERLAY_TRIPLETS)
     set(VCPKG_OVERLAY_TRIPLETS "${CMAKE_CURRENT_SOURCE_DIR}/custom-triplets"
         CACHE STRING "vcpkg overlay triplets")
 endif()
-if(NOT DEFINED VCPKG_TARGET_TRIPLET AND WIN32)
+if(NOT DEFINED VCPKG_TARGET_TRIPLET AND CMAKE_HOST_WIN32)
     set(VCPKG_TARGET_TRIPLET "custom-x64-windows"
         CACHE STRING "vcpkg target triplet")
 endif()
@@ -30,7 +30,16 @@ project(Marduk
     LANGUAGES CXX
 )
 
-# RC 仅在 Windows 上启用（ZfwInteractionDll.rc 需要）
+# 仅 Windows 目标平台（无论是 MSVC native 还是 Linux→MinGW 交叉，
+# CMAKE_SYSTEM_NAME 都是 Windows，因此 WIN32 == TRUE）
+if(NOT WIN32)
+    message(FATAL_ERROR
+        "Marduk targets Windows only. "
+        "On Linux, use the 'linux-cross' preset (MinGW-w64) instead.")
+endif()
+
+# RC 仅在 Windows 目标上启用（MSVC: rc.exe，MinGW: windres）。
+# 给一个 if(WIN32) 防御层，方便单元/语法测试在 Linux 上临时跳过 fatal。
 if(WIN32)
     enable_language(RC)
 endif()
@@ -46,11 +55,6 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 # 工程名 + "_EXPORTS"，不要改目标名。
 set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS OFF)
 
-# 仅 Windows 平台
-if(NOT WIN32)
-    message(FATAL_ERROR "Marduk currently only supports Windows.")
-endif()
-
 # 全局宏：与原 .vcxproj/Directory.Build.props 保持一致
 add_compile_definitions(
     UNICODE
@@ -60,15 +64,15 @@ add_compile_definitions(
     _WINSOCK_DEPRECATED_NO_WARNINGS
 )
 
-# MSVC 编译选项
+# ── MSVC（Windows 原生构建）──
 if(MSVC)
     add_compile_options(
         /utf-8           # 源文件 UTF-8（原 Directory.Build.props 全局选项）
         /permissive-     # ConformanceMode=true
         /W3              # WarningLevel=Level3
-        /MP              # 并行编译，加速整体构建
+        /MP              # 并行编译
         /sdl             # SDLCheck=true
-        /Zc:__cplusplus  # 让 __cplusplus 反映真实 C++ 版本，避免一些三方库误判
+        /Zc:__cplusplus  # 让 __cplusplus 反映真实 C++ 版本
     )
     add_compile_options(
         $<$<CONFIG:Release>:/Gy>  # FunctionLevelLinking
@@ -78,6 +82,21 @@ if(MSVC)
     add_link_options(
         $<$<CONFIG:Release>:/LTCG>
         /DEBUG  # 始终生成 .pdb（GenerateDebugInformation=true）
+    )
+endif()
+
+# ── GCC 兼容（MinGW-w64 cross-build）──
+# clang-cl 在 CMake 里依然走 MSVC 分支，不会落到这里。
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+    add_compile_options(
+        -finput-charset=UTF-8
+        -fexec-charset=UTF-8
+        -Wa,-mbig-obj           # 应对 PCH 与 ONNX 等大目标的段数限制
+    )
+    # 抑制 MinGW 头里几个高噪音的告警，方便 CI 日志阅读
+    add_compile_options(
+        -Wno-attributes
+        -Wno-unknown-pragmas    # 源代码里有 #pragma comment(lib, ...)
     )
 endif()
 
@@ -91,7 +110,6 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${MARDUK_OUTPUT_DIR}")
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${MARDUK_OUTPUT_DIR}")
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${MARDUK_OUTPUT_DIR}")
 
-# 多配置生成器下，CMAKE_*_OUTPUT_DIRECTORY_<CONFIG> 也指向同一根
 foreach(_cfg IN ITEMS Debug Release RelWithDebInfo MinSizeRel)
     string(TOUPPER "${_cfg}" _cfg_up)
     set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_${_cfg_up} "${MARDUK_OUTPUT_DIR}/${_cfg}")
@@ -101,27 +119,54 @@ endforeach()
 
 # vcpkg 在 Windows 下默认开启 applocal 部署，所有依赖 DLL 会自动拷到
 # 可执行文件旁边，无需手动复制 vcpkg_installed\<triplet>\bin\*.dll。
-# 但 NDK/CI 安全起见：仍保留 CI 中的兜底拷贝步骤。
-set(VCPKG_APPLOCAL_DEPS ON CACHE BOOL "" FORCE)
-set(X_VCPKG_APPLOCAL_DEPS_INSTALL ON CACHE BOOL "" FORCE)
+# 跨编译时 (MinGW) applocal 不可用，但 vcpkg 会把 dll 装到
+# vcpkg_installed/<triplet>/bin/，由 Dockerfile/CI 复制即可。
+if(MSVC)
+    set(VCPKG_APPLOCAL_DEPS ON CACHE BOOL "" FORCE)
+    set(X_VCPKG_APPLOCAL_DEPS_INSTALL ON CACHE BOOL "" FORCE)
+endif()
 
 # ───────────────────────────────────────────────────────────────────
-# 子项目
+# 可选目标 —— 可单独关闭以适配跨编译（vcpkg 在 MinGW 下对 Qt6 /
+# onnxruntime / opencv4 的支持仍不稳定）。
 # ───────────────────────────────────────────────────────────────────
+option(MARDUK_BUILD_GUI
+    "Build the Qt6-based MardukGui front-end (requires qtbase + qttools)"
+    ON)
+option(MARDUK_BUILD_ZFW
+    "Build ZfwInteractionDll and its consumers Marduk/TestApp \
+(requires onnxruntime + opencv4 + cryptopp + gumbo)"
+    ON)
+option(MARDUK_BUILD_NETDIAG
+    "Build NetworkDiagnosticDll \
+(disabled by default on the linux-cross preset because Debian's \
+mingw-w64 ships winhttp.h / wininet.h with a HTTP_VERSION_INFO typedef \
+collision; works fine on MSVC and on llvm-mingw)"
+    ON)
 
-# 库（DLL）—— 顺序无关，但靠前列出方便阅读
+# 库（DLL）—— 三个轻量 DLL 一直构建
 add_subdirectory(DNSManagerDll)
-add_subdirectory(NetworkDiagnosticDll)
+if(MARDUK_BUILD_NETDIAG)
+    add_subdirectory(NetworkDiagnosticDll)
+endif()
 add_subdirectory(WifiPortalDll)
-add_subdirectory(ZfwInteractionDll)
 
-# 可执行
-add_subdirectory(Marduk)
-add_subdirectory(TestApp)
+# 重型 DLL 与依赖它的 EXE
+if(MARDUK_BUILD_ZFW)
+    if(NOT MARDUK_BUILD_NETDIAG)
+        message(FATAL_ERROR
+            "MARDUK_BUILD_ZFW=ON requires MARDUK_BUILD_NETDIAG=ON \
+(Marduk.exe links NetworkDiagnosticDll).")
+    endif()
+    add_subdirectory(ZfwInteractionDll)
+    add_subdirectory(Marduk)
+    add_subdirectory(TestApp)
+endif()
+
+# 提权代理（仅依赖 DNSManagerDll，跨编译也能跑）
 add_subdirectory(MardukElevated)
 
-# GUI（Qt）—— 可选构建：默认 ON，找不到 Qt 时关掉即可
-option(MARDUK_BUILD_GUI "Build the Qt-based MardukGui front-end" ON)
+# Qt GUI
 if(MARDUK_BUILD_GUI)
     add_subdirectory(MardukGui)
 endif()
@@ -132,10 +177,15 @@ endif()
 message(STATUS "----- Marduk build configuration -----")
 message(STATUS "  CMake version       : ${CMAKE_VERSION}")
 message(STATUS "  Generator           : ${CMAKE_GENERATOR}")
+message(STATUS "  Host                : ${CMAKE_HOST_SYSTEM_NAME}")
+message(STATUS "  Target              : ${CMAKE_SYSTEM_NAME} ${CMAKE_SYSTEM_PROCESSOR}")
+message(STATUS "  Compiler            : ${CMAKE_CXX_COMPILER_ID} ${CMAKE_CXX_COMPILER_VERSION}")
 message(STATUS "  C++ standard        : ${CMAKE_CXX_STANDARD}")
 message(STATUS "  Toolchain           : ${CMAKE_TOOLCHAIN_FILE}")
 message(STATUS "  vcpkg triplet       : ${VCPKG_TARGET_TRIPLET}")
 message(STATUS "  vcpkg overlays      : ${VCPKG_OVERLAY_TRIPLETS}")
 message(STATUS "  Output directory    : ${MARDUK_OUTPUT_DIR}")
 message(STATUS "  Build GUI           : ${MARDUK_BUILD_GUI}")
+message(STATUS "  Build ZFW (heavy)   : ${MARDUK_BUILD_ZFW}")
+message(STATUS "  Build NetDiag       : ${MARDUK_BUILD_NETDIAG}")
 message(STATUS "--------------------------------------")

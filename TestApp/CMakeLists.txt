@@ -13,3 +13,7 @@ target_link_libraries(TestApp PRIVATE
 set_target_properties(TestApp PROPERTIES
     WIN32_EXECUTABLE FALSE   # Console (wmain)
 )
+if(NOT MSVC)
+    target_compile_options(TestApp PRIVATE -municode)
+    target_link_options(TestApp    PRIVATE -municode)
+endif()
