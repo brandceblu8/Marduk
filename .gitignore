@@ -24,5 +24,7 @@ vcpkg_installed/
 
 # Misc
 Debug/
+Release/
+x64/
 report/
 target/

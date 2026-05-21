@@ -56,10 +56,12 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS OFF)
 
 # 全局宏：与原 .vcxproj/Directory.Build.props 保持一致
+# 注意：WIN32_LEAN_AND_MEAN 故意不在这里全局定义，因为各 DLL 的 framework.h
+# 已自行 #define 它（那是 VS 默认生成的模式），而 Marduk.exe / MardukGui 需要
+# shellapi.h 等被 LEAN_AND_MEAN 排除的头——全局定义会导致编译失败。
 add_compile_definitions(
     UNICODE
     _UNICODE
-    WIN32_LEAN_AND_MEAN
     NOMINMAX
     _WINSOCK_DEPRECATED_NO_WARNINGS
 )
@@ -81,7 +83,7 @@ if(MSVC)
     )
     add_link_options(
         $<$<CONFIG:Release>:/LTCG>
-        /DEBUG  # 始终生成 .pdb（GenerateDebugInformation=true）
+        $<$<CONFIG:Debug>:/DEBUG:FULL>
     )
 endif()
 
